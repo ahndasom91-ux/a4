@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="css/app.css">
 </head>
-<body>
+<body class="wide">
 <div class="wrap">
   <header class="top">
     <h1>지점별 A4 발주 확인</h1>
@@ -37,7 +37,7 @@
     </div>
     <p class="hint" id="resultHint">이름(담당주임단)이나 주소 일부를 입력하면 담당 지점이 나옵니다. 본부 › 사업단 › 지점 순으로 정렬됩니다.</p>
 
-    <div class="tbl cards" id="tblWrap">
+    <div class="tbl cards fit" id="tblWrap">
       <table>
         <thead><tr>
           <th>본부 › 사업단 › 지점</th><th>관리자</th><th>주소</th><th>담당주임단</th><th>수량(박스)</th><th>비고</th><th>상태</th>
@@ -195,7 +195,7 @@
       const changed = Object.keys(d).length ? ' changed' : '';
       return `<tr class="${isUnit ? 'unit' : ''}${changed}" data-id="${esc(r.row_id)}">
         <td class="full"><div class="path">${esc(parent.join(' › '))}${parent.length ? ' › ' : ''}<b>${esc(label)}</b>${isUnit ? ' <span class="badge">' + (r['사업단'] ? '사업단' : '본부') + ' 단위</span>' : splitTag}</div></td>
-        <td data-l="관리자">${esc(r['관리자'])}<span class="muted small"> ${esc(r['직책'])}</span></td>
+        <td data-l="관리자" title="${esc(r['직책'])}">${esc(r['관리자'])}</td>
         <td class="addr" data-l="주소"><input type="text" data-f="최종주소" value="${esc(cur('최종주소'))}" title="${esc(cur('최종주소'))}" ${ro ? 'disabled' : ''}>${addrWas}</td>
         <td class="mgr" data-l="주임단"><input type="text" data-f="최종주임단" value="${esc(cur('최종주임단'))}" ${ro ? 'disabled' : ''}>${mgrWas}</td>
         <td class="num" data-l="수량">${isUnit ? '<span class="muted">대상 외</span>' : `<input type="number" min="0" step="1" data-f="최종박스" value="${esc(cur('최종박스'))}" ${ro ? 'disabled' : ''}>${boxWas}`}</td>
