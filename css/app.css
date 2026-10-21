@@ -102,6 +102,8 @@ body.wide .wrap{max-width:none; padding-left:20px; padding-right:20px}
 .fit td input[type=number]{width:64px}
 .fit td .path{white-space:nowrap}
 .fit td .was{white-space:normal}
+th.sel, td.sel{width:1%; text-align:center; padding-left:8px; padding-right:4px}
+td.sel input, th.sel input{width:17px; height:17px; margin:0; vertical-align:middle; accent-color:var(--accent)}
 @media (max-width:1400px){ .fit table{font-size:12.5px} .fit th, .fit td{padding:6px 7px} .fit td .path b{font-size:13px} }
 .legend{margin:14px 0 0; padding:12px 16px; border:1px solid var(--line); border-radius:8px; background:var(--surface); font-size:13px; color:var(--ink-2)}
 .legend h3{font-size:13px; margin:0 0 6px; color:var(--ink)}

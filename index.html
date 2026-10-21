@@ -40,7 +40,7 @@
     <div class="tbl cards fit" id="tblWrap">
       <table>
         <thead><tr>
-          <th>본부 › 사업단 › 지점</th><th>관리자</th><th>주소</th><th>담당주임단</th><th>수량(박스)</th><th>비고</th><th>상태</th>
+          <th class="sel"><input type="checkbox" id="chkAll" title="표시된 행 전체 선택/해제"></th><th>본부 › 사업단 › 지점</th><th>관리자</th><th>주소</th><th>담당주임단</th><th>수량(박스)</th><th>비고</th><th>상태</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -50,7 +50,7 @@
       <h3>이용 안내</h3>
       <ul>
         <li><b>수정</b>: 주소·담당주임단·수량·비고 칸을 바로 고치면 노란 배경으로 표시됩니다. 하단에서 본인 이름과 변경 사유를 넣고 <b>저장</b>을 누르세요.</li>
-        <li><b>확인 완료</b>: 고칠 내용이 없어도 <b>확인 완료</b>를 눌러 주세요. 담당자가 확인 여부를 파악합니다.</li>
+        <li><b>확인 완료</b>: 왼쪽 체크박스로 확인한 행을 고른 뒤 <b>확인 완료</b>를 누르세요. 본인 이름을 선택하면 담당 행이 자동으로 체크됩니다. 고칠 내용이 없어도 눌러 주세요.</li>
         <li><span class="badge bad">매칭안됨</span> 정산 자료에서 지점명을 찾지 못해 수량이 0으로 산정된 지점입니다. 실제 필요한 수량을 직접 입력해 주세요.</li>
         <li><span class="badge soft">B · 2분할</span> 한 지점이 주소 여러 곳으로 나뉜 경우입니다. 지점 수량을 주소 수로 나눠 각 행에 배분했습니다.</li>
         <li>한 주소로 몰아 받으려면 그 행의 수량을 올리고 나머지 행은 0으로 고치세요.</li>
@@ -82,6 +82,7 @@
   const $ = A4.q, esc = A4.esc;
   let code = '', round = null, rows = [], confirms = [], view = [];
   const dirty = {}; // row_id -> {field: value}
+  const selected = new Set(); // 확인 완료 대상으로 체크된 row_id
 
   // ── 진입
   const params = new URLSearchParams(location.search);
@@ -137,7 +138,25 @@
       '<option value="__free">직접 입력…</option>' +
       Array.from(names).sort((a, b) => a.localeCompare(b, 'ko')).map(n => `<option>${esc(n)}</option>`).join('');
   }
-  $('#editor').onchange = () => { $('#editorFree').classList.toggle('hidden', $('#editor').value !== '__free'); };
+  $('#editor').onchange = () => {
+    $('#editorFree').classList.toggle('hidden', $('#editor').value !== '__free');
+    // 이름을 고르면 그 사람 담당 행을 자동으로 체크 (이미 체크한 것이 없을 때만)
+    const name = editorName();
+    if (name && $('#editor').value !== '__free' && selected.size === 0) {
+      view.forEach(r => { if (String(r['최종주임단'] || r['담당주임단'] || '').indexOf(name) >= 0) selected.add(r.row_id); });
+      syncChecks();
+    }
+  };
+  function syncChecks() {
+    A4.qa('.rowchk').forEach(c => { c.checked = selected.has(c.dataset.id); });
+    const vis = view.map(r => r.row_id);
+    const nSel = vis.filter(id => selected.has(id)).length;
+    const all = $('#chkAll'); all.checked = vis.length > 0 && nSel === vis.length; all.indeterminate = nSel > 0 && nSel < vis.length;
+    $('#confirmBtn').textContent = nSel ? `선택 ${nSel}행 확인 완료` : '확인 완료';
+    $('#confirmBtn').disabled = nSel === 0;
+  }
+  $('#chkAll').onchange = () => { const on = $('#chkAll').checked; view.forEach(r => { if (on) selected.add(r.row_id); else selected.delete(r.row_id); }); syncChecks(); };
+  $('#tbody').addEventListener('change', e => { const c = e.target.closest('.rowchk'); if (!c) return; if (c.checked) selected.add(c.dataset.id); else selected.delete(c.dataset.id); syncChecks(); });
   function editorName() { const v = $('#editor').value; return (v === '__free' ? $('#editorFree').value : v).trim(); }
 
   // ── 검색/표시
@@ -194,6 +213,7 @@
       if (r['최종수정자']) status.push(`<span class="badge" title="${esc(r['최종수정일시'])}">${esc(r['최종수정자'])} 수정</span>`);
       const changed = Object.keys(d).length ? ' changed' : '';
       return `<tr class="${isUnit ? 'unit' : ''}${changed}" data-id="${esc(r.row_id)}">
+        <td class="sel" data-l="선택"><input type="checkbox" class="rowchk" data-id="${esc(r.row_id)}" ${selected.has(r.row_id) ? 'checked' : ''} ${ro ? 'disabled' : ''}></td>
         <td class="full"><div class="path">${esc(parent.join(' › '))}${parent.length ? ' › ' : ''}<b>${esc(label)}</b>${isUnit ? ' <span class="badge">' + (r['사업단'] ? '사업단' : '본부') + ' 단위</span>' : splitTag}</div></td>
         <td data-l="관리자" title="${esc(r['직책'])}">${esc(r['관리자'])}</td>
         <td class="addr" data-l="주소"><input type="text" data-f="최종주소" value="${esc(cur('최종주소'))}" title="${esc(cur('최종주소'))}" ${ro ? 'disabled' : ''}>${addrWas}</td>
@@ -204,6 +224,7 @@
       </tr>`;
     }).join('');
     updateBar();
+    syncChecks();
   }
   function fmtNum(n) { n = Number(n); return isFinite(n) ? (Math.round(n * 100) / 100).toLocaleString('ko-KR') : ''; }
   /** '다송지점B' → 'B', '샛별지점B(서부1)' → 'B', 글자 없는 행 → '' */
@@ -264,12 +285,14 @@
     const editor = editorName();
     if (!editor) { A4.toast('본인 이름을 선택해 주세요', 'bad'); $('#editor').focus(); return; }
     if (Object.keys(dirty).length) { A4.toast('먼저 변경 내용을 저장하거나 취소해 주세요', 'bad'); return; }
-    const ids = view.map(r => r.row_id);
-    if (!window.confirm(`표시된 ${ids.length}개 행을 "${editor}" 이름으로 확인 완료 처리합니다. 계속할까요?`)) return;
+    const ids = view.map(r => r.row_id).filter(id => selected.has(id));
+    if (!ids.length) { A4.toast('확인 완료할 행을 체크해 주세요', 'bad'); return; }
+    if (!window.confirm(`체크한 ${ids.length}개 행을 "${editor}" 이름으로 확인 완료 처리합니다. 계속할까요?`)) return;
     try {
       const res = await A4.api('confirm', { code, editor, row_ids: ids });
       confirms.push({ 주임단: editor, 확인일시: res.at });
-      view.forEach(r => { r['확인상태'] = '확인'; });
+      rows.forEach(r => { if (ids.indexOf(r.row_id) >= 0) r['확인상태'] = '확인'; });
+      ids.forEach(id => selected.delete(id));
       A4.toast(`${res.confirmed}개 행 확인 완료`, 'ok'); render(!$('#q').value.trim());
     } catch (e) { A4.toast(e.message, 'bad'); }
   };
