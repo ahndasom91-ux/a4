@@ -430,7 +430,7 @@
       if (r['최종수정자']) st.push(`<span class="badge" title="${esc(r['최종수정일시'])}">${esc(r['최종수정자'])}</span>`);
       const dis = editable ? '' : 'disabled';
       return `<tr class="${isUnit ? 'unit' : ''}${Object.keys(d).length ? ' changed' : ''}" data-id="${esc(r.row_id)}">
-        <td><div class="path">${esc(path.slice(0, -1).join(' › '))}${path.length > 1 ? ' › ' : ''}<b>${esc(label)}</b>${isUnit ? ' <span class="badge">단위</span>' : (r['분할수'] > 1 ? ` <span class="badge soft">${esc(r['분할수'])}분할</span>` : '')}</div></td>
+        <td><div class="path">${esc(path.slice(0, -1).join(' › '))}${path.length > 1 ? ' › ' : ''}<b>${esc(label)}</b>${isUnit ? ' <span class="badge">단위</span>' : (r['분할수'] > 1 ? ` <span class="badge soft" title="지점 합계 ${Math.round(Number(r['신계약건수']) * r['분할수'] * 100) / 100}건 ÷ ${esc(r['분할수'])}">${splitLetter(r['지점']) ? splitLetter(r['지점']) + ' · ' : ''}${esc(r['분할수'])}분할</span>` : '')}</div></td>
         <td class="small">${esc(r['관리자'])}</td>
         <td class="addr"><input type="text" data-f="최종주소" value="${esc(cur_('최종주소'))}" ${dis}>${cur_('최종주소') !== r['주소'] ? `<span class="was">원본: ${esc(r['주소'])}</span>` : ''}</td>
         <td><input type="text" data-f="최종주임단" value="${esc(cur_('최종주임단'))}" style="width:110px" ${dis}></td>
@@ -532,6 +532,7 @@
   function toLocalInput(d) { const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
   function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); x.setHours(18, 0, 0, 0); return x; }
   function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
+  function splitLetter(name) { const s = String(name || ''); const m = s.match(/지점([A-Z])\(.*\)$/) || s.match(/(?:지점|\))([A-Z])$/); return m ? m[1] : ''; }
 })();
 </script>
 </body>
