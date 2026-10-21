@@ -40,21 +40,22 @@
     <div class="tbl cards" id="tblWrap">
       <table>
         <thead><tr>
-          <th>본부 › 사업단 › 지점</th><th>관리자</th><th>주소</th><th>담당주임단</th><th>신계약</th><th>수량(박스)</th><th>비고</th><th>상태</th>
+          <th>본부 › 사업단 › 지점</th><th>관리자</th><th>주소</th><th>담당주임단</th><th>수량(박스)</th><th>비고</th><th>상태</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
 
     <p class="hint small" id="legend">
-      수량은 신계약(생명/장기) 건수 ÷ 30 올림으로 자동 산정되었습니다. 바뀐 값은 노란 배경으로 표시되며, 저장 시 변경 사유를 함께 남깁니다.
-      <span class="badge bad">매칭안됨</span> 은 정산 자료에서 지점명을 찾지 못해 0건으로 산정된 지점입니다. 실제 수량을 직접 입력해 주세요.
+      바뀐 값은 노란 배경으로 표시되며, 저장 시 변경 사유를 함께 남깁니다.
+      <span class="badge bad">매칭안됨</span> 은 정산 자료에서 지점명을 찾지 못해 수량이 0으로 산정된 지점입니다. 실제 수량을 직접 입력해 주세요.
       <span class="badge soft">B · 2분할</span> 처럼 표시된 지점은 한 지점이 주소 여러 곳으로 나뉜 경우입니다. 지점 합계 건수를 주소 수로 나눠 각 행에 배분했으니, 한 주소로 몰아 받으려면 그 행의 수량을 올리고 나머지 행은 0으로 고치세요.
       다른 주임단이 담당하는 짝 주소도 <span class="badge warn">같은 지점</span> 표시와 함께 나오며, 수정하면 해당 주임단에게도 보입니다.
+      지점 합계 수량을 주소 수로 나눈 값이 각 행의 자동산정 수량입니다.
     </p>
   </section>
 
-  <p class="footer">문의: 설계사서비스기획팀 · <a href="admin.html">관리자</a></p>
+  <p class="footer">문의: RP영업지원팀 안다솜 과장</p>
 </div>
 
 <!-- 저장 바 -->
@@ -177,9 +178,7 @@
       const parent = isUnit ? path.slice(0, -1) : path.slice(0, -1);
       const nSplit = Number(r['분할수']) || 1;
       const letter = splitLetter(r['지점'], r['지점_정규화']);
-      const groupTotal = nSplit > 1 ? Math.round(Number(r['신계약건수']) * nSplit * 100) / 100 : 0;
-      const splitTag = nSplit > 1 ? ` <span class="badge soft" title="${esc(r['지점_정규화'])}이(가) 주소 ${nSplit}곳으로 나뉘어 있습니다. 지점 합계 ${esc(fmtNum(groupTotal))}건을 ${nSplit}등분해 산정했습니다. 특정 주소에만 보내려면 그 행 수량을 올리고 나머지 행은 0으로 고치세요.">${letter ? esc(letter) + ' · ' : ''}${nSplit}분할</span>` : '';
-      const countCell = isUnit ? '<span class="muted">-</span>' : (nSplit > 1 ? `${esc(fmtNum(r['신계약건수']))}<span class="was" style="color:var(--ink-3)">지점 합계 ${esc(fmtNum(groupTotal))} ÷ ${nSplit}</span>` : esc(fmtNum(r['신계약건수'])));
+      const splitTag = nSplit > 1 ? ` <span class="badge soft" title="${esc(r['지점_정규화'])}이(가) 주소 ${nSplit}곳으로 나뉘어 있습니다. 지점 수량을 ${nSplit}등분해 산정했습니다. 특정 주소에만 보내려면 그 행 수량을 올리고 나머지 행은 0으로 고치세요.">${letter ? esc(letter) + ' · ' : ''}${nSplit}분할</span>` : '';
       const boxWas = !isUnit && String(cur('최종박스')) !== String(r['산정박스']) ? `<span class="was">자동산정 ${esc(r['산정박스'])}</span>` : '';
       const addrWas = cur('최종주소') !== r['주소'] ? `<span class="was">원본: ${esc(r['주소'])}</span>` : '';
       const mgrWas = cur('최종주임단') !== r['담당주임단'] ? `<span class="was">원본: ${esc(r['담당주임단'])}</span>` : '';
@@ -194,7 +193,6 @@
         <td data-l="관리자">${esc(r['관리자'])}<span class="muted small"> ${esc(r['직책'])}</span></td>
         <td class="addr" data-l="주소"><input type="text" data-f="최종주소" value="${esc(cur('최종주소'))}" ${ro ? 'disabled' : ''}>${addrWas}</td>
         <td data-l="주임단"><input type="text" data-f="최종주임단" value="${esc(cur('최종주임단'))}" ${ro ? 'disabled' : ''}>${mgrWas}</td>
-        <td class="num" data-l="신계약">${countCell}</td>
         <td class="num" data-l="수량">${isUnit ? '<span class="muted">대상 외</span>' : `<input type="number" min="0" step="1" data-f="최종박스" value="${esc(cur('최종박스'))}" ${ro ? 'disabled' : ''}>${boxWas}`}</td>
         <td data-l="비고"><input type="text" data-f="비고" value="${esc(cur('비고'))}" placeholder="${ro ? '' : '메모'}" ${ro ? 'disabled' : ''}></td>
         <td data-l="상태">${status.join(' ') || '<span class="muted small">미확인</span>'}</td>
