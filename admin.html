@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>A4 발주 관리</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/app.css">
+<style>
+  .alias-tbl td{padding:5px 8px}
+  .alias-tbl input, .alias-tbl select{padding:4px 8px; font-size:13px}
+  .status-head{display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center}
+  .status-head h2{margin:0}
+  td .rowsave{margin-left:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>A4 발주 관리</h1>
+    <span class="sub">담당자 화면</span>
+    <span class="spacer"></span>
+    <a class="sub" href="index.html" target="_blank">주임단 화면 열기</a>
+    <button class="btn ghost sm hidden" id="logout">로그아웃</button>
+  </header>
+
+  <!-- 로그인 -->
+  <section id="login" class="login card">
+    <h2>관리자 로그인</h2>
+    <p class="hint">비밀번호는 스프레드시트 <b>config</b> 탭의 <code>admin_password</code> 값입니다.</p>
+    <label class="f">비밀번호<input type="password" id="pw" autocomplete="current-password"></label>
+    <div class="actions" style="margin-top:12px"><button class="btn" id="loginBtn">로그인</button></div>
+    <p id="loginErr" class="small" style="color:var(--bad)"></p>
+  </section>
+
+  <section id="app" class="hidden">
+    <nav class="tabs">
+      <button data-tab="new" class="on">① 새 회차</button>
+      <button data-tab="status">② 진행 현황</button>
+      <button data-tab="config">③ 설정</button>
+    </nav>
+
+    <!-- ① 새 회차 -->
+    <div id="tab-new">
+      <div class="card">
+        <h2>1. 파일 올리기</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="files" multiple accept=".xlsx,.xls,.xlsm">
+          <div><b>조직현황.xlsx</b> 와 <b>신계약정산평가업적.xlsx</b> 를 여기에 끌어다 놓거나 클릭해서 선택하세요.<br>
+          <span class="small">두 시트가 한 파일에 들어 있어도 됩니다. 파일은 브라우저 안에서만 읽고 서버로 보내지 않습니다.</span></div>
+        </label>
+        <div class="files" id="fileList"></div>
+        <div id="aggErr" class="callout bad hidden"></div>
+      </div>
+
+      <div id="aggResult" class="hidden">
+        <div class="card">
+          <h2>2. 집계 결과</h2>
+          <div class="kpis" id="aggKpis"></div>
+          <p class="small muted" id="aggMeta"></p>
+          <div id="unmatchedBox"></div>
+          <details id="perfOnlyBox"></details>
+          <details>
+            <summary>집계 미리보기 (전체 행)</summary>
+            <div class="row" style="margin:8px 0"><input type="search" id="prevQ" placeholder="지점·본부·주임단으로 필터"></div>
+            <div class="tbl" style="max-height:420px; overflow:auto" id="prevWrap">
+              <table><thead><tr><th>#</th><th>본부</th><th>사업단</th><th>지점</th><th>정규화</th><th>담당주임단</th><th>주소</th><th>신계약</th><th>박스</th><th>분할</th><th>매칭</th></tr></thead><tbody id="prevBody"></tbody></table>
+            </div>
+          </details>
+          <div class="actions"><button class="btn ghost" id="prevXlsx">미리보기 엑셀 다운로드</button></div>
+        </div>
+
+        <div class="card">
+          <h2>3. 회차 생성</h2>
+          <div class="row">
+            <label class="f">회차 ID (YYYY-MM)<input type="text" id="roundId" placeholder="2026-10"></label>
+            <label class="f">제목<input type="text" id="roundTitle"></label>
+            <label class="f">마감일시<input type="datetime-local" id="deadline"></label>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <label class="small fixed"><input type="checkbox" id="replace"> 같은 ID의 기존 회차를 삭제하고 덮어쓰기 (주임단 수정 내역도 함께 삭제됨)</label>
+          </div>
+          <div class="actions" style="margin-top:10px"><button class="btn" id="createBtn">회차 생성</button></div>
+          <div id="createResult"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② 진행 현황 -->
+    <div id="tab-status" class="hidden">
+      <div class="card">
+        <div class="status-head">
+          <h2>회차</h2>
+          <select id="roundSel"></select>
+          <button class="btn ghost sm" id="reloadStatus">새로고침</button>
+          <span class="spacer"></span>
+          <span class="small muted" id="statusTime"></span>
+        </div>
+        <div id="statusBanner" class="banner"></div>
+        <div class="linkbox" id="linkBox"></div>
+        <div class="actions" id="roundActions"></div>
+        <div class="kpis" id="statusKpis"></div>
+      </div>
+
+      <div class="card">
+        <h2>미확인 주임단 <span class="badge" id="unconfCnt"></span></h2>
+        <p class="small" id="unconfList"></p>
+        <div class="actions"><button class="btn ghost sm" id="copyUnconf">명단 복사</button><button class="btn ghost sm" id="copyConf">확인 완료 명단 복사</button></div>
+      </div>
+
+      <div class="card">
+        <h2>변경 내역 <span class="badge" id="editCnt"></span></h2>
+        <div class="tbl" style="max-height:360px; overflow:auto">
+          <table><thead><tr><th>일시</th><th>지점</th><th>항목</th><th>이전</th><th>변경</th><th>수정자</th><th>사유</th></tr></thead><tbody id="editBody"></tbody></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>지점 전체 <span class="small muted">(담당자는 마감 후에도 수정 가능)</span></h2>
+        <div class="row" style="margin:6px 0 10px">
+          <input type="search" id="rowsQ" placeholder="지점·본부·주임단·주소 필터">
+          <select id="rowsFilter" class="fixed"><option value="">전체</option><option value="changed">수정된 행</option><option value="unmatched">매칭안됨</option><option value="unconfirmed">미확인</option><option value="zero">0박스</option></select>
+        </div>
+        <div class="tbl" style="max-height:560px; overflow:auto">
+          <table><thead><tr><th>본부 › 사업단 › 지점</th><th>관리자</th><th>주소</th><th>주임단</th><th>신계약</th><th>산정</th><th>최종</th><th>비고</th><th>상태</th></tr></thead><tbody id="rowsBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ 설정 -->
+    <div id="tab-config" class="hidden">
+      <div class="card">
+        <h2>집계 설정</h2>
+        <div class="row">
+          <label class="f">박스 기준 (신계약 n건당 1박스)<input type="number" id="cfgDivisor" min="1"></label>
+          <label class="f">합산할 열 이름 (정산평가업적)<input type="text" id="cfgCountCol"></label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>지점명 별칭 <span class="small muted">조직현황 지점명 → 정산업적 지점명</span></h2>
+        <div class="tbl"><table class="alias-tbl"><thead><tr><th>조직현황 지점명(정규화)</th><th>정산업적 지점명</th><th></th></tr></thead><tbody id="aliasBody"></tbody></table></div>
+        <div class="row" style="margin-top:8px"><input type="text" id="aliasFrom" placeholder="조직현황 지점명"><input type="text" id="aliasTo" placeholder="정산업적 지점명"><button class="btn ghost fixed" id="aliasAdd">추가</button></div>
+      </div>
+      <div class="card">
+        <h2>접속코드 방식</h2>
+        <div class="row">
+          <label class="f">방식<select id="cfgCodeMode"><option value="round">회차별 자동 생성 (추천)</option><option value="fixed">고정 코드 1개</option></select></label>
+          <label class="f">고정 코드 (fixed 일 때)<input type="text" id="cfgFixed" placeholder="예: goodrich-a4"></label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>관리자 비밀번호 변경</h2>
+        <div class="row"><label class="f">새 비밀번호 (6자 이상)<input type="password" id="cfgPw" autocomplete="new-password"></label></div>
+      </div>
+      <div class="actions"><button class="btn" id="cfgSave">설정 저장</button></div>
+    </div>
+  </section>
+
+  <p class="footer">A4 발주 취합 · 관리자</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="js/api.js"></script>
+<script src="js/agg.js"></script>
+<script>
+(function () {
+  const $ = A4.q, esc = A4.esc;
+  let token = '', config = null;
+  let workbooks = [], fileNames = [], agg = null;
+  let rounds = [], cur = null; // cur: {round, rows, edits, confirms}
+  const adminDirty = {};
+
+  const api = (action, p) => A4.api(action, Object.assign({ token }, p || {})).catch(e => { if (e.auth === false) { doLogout(); } throw e; });
+
+  // ── 로그인
+  try { token = sessionStorage.getItem('a4tok') || ''; } catch (e) {}
+  if (token) enter(); else $('#pw').focus();
+  $('#loginBtn').onclick = login;
+  $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  async function login() {
+    $('#loginErr').textContent = '';
+    try {
+      const r = await A4.api('admin.login', { password: $('#pw').value });
+      token = r.token; try { sessionStorage.setItem('a4tok', token); } catch (e) {}
+      enter();
+    } catch (e) { $('#loginErr').textContent = e.message; }
+  }
+  function doLogout() { token = ''; try { sessionStorage.removeItem('a4tok'); } catch (e) {} $('#app').classList.add('hidden'); $('#login').classList.remove('hidden'); $('#logout').classList.add('hidden'); }
+  $('#logout').onclick = doLogout;
+
+  async function enter() {
+    try {
+      const c = await api('admin.getConfig'); config = c.config;
+    } catch (e) { if (token) { $('#loginErr').textContent = e.message; } return; }
+    $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#logout').classList.remove('hidden');
+    fillConfigForm(); loadRounds();
+  }
+
+  // ── 탭
+  A4.qa('.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+  function showTab(t) {
+    A4.qa('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+    ['new', 'status', 'config'].forEach(x => $('#tab-' + x).classList.toggle('hidden', x !== t));
+    if (t === 'status' && !cur && rounds.length) loadStatus(rounds[rounds.length - 1].round_id);
+  }
+
+  // ════════════ ① 새 회차 ════════════
+  const drop = $('#drop');
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+  $('#files').addEventListener('change', e => handleFiles(e.target.files));
+
+  async function handleFiles(list) {
+    const files = Array.from(list || []).filter(f => /\.xls[xm]?$/i.test(f.name));
+    if (!files.length) return;
+    for (const f of files) {
+      const buf = await f.arrayBuffer();
+      workbooks.push(XLSX.read(buf, { type: 'array', cellDates: false }));
+      fileNames.push(f.name);
+    }
+    $('#fileList').innerHTML = fileNames.map(n => `<span class="badge">${esc(n)}</span>`).join(' ') + ` <button class="btn ghost sm" id="clearFiles">파일 비우기</button>`;
+    $('#clearFiles').onclick = () => { workbooks = []; fileNames = []; agg = null; $('#fileList').innerHTML = ''; $('#aggResult').classList.add('hidden'); $('#aggErr').classList.add('hidden'); };
+    runAgg();
+  }
+
+  function runAgg() {
+    $('#aggErr').classList.add('hidden');
+    try {
+      agg = A4Agg.aggregate(XLSX, workbooks, { aliases: config.aliases, divisor: config.box_divisor, countCol: config.count_col });
+    } catch (e) {
+      agg = null; $('#aggResult').classList.add('hidden');
+      $('#aggErr').textContent = e.message + (workbooks.length < 2 ? ' 두 파일을 모두 올렸는지 확인하세요.' : ''); $('#aggErr').classList.remove('hidden');
+      return;
+    }
+    renderAgg();
+  }
+
+  function renderAgg() {
+    const t = agg.totals, w = agg.warnings;
+    $('#aggResult').classList.remove('hidden');
+    $('#aggKpis').innerHTML = kpi('지점 행', t.branchRows) + kpi('본부·사업단 단위', t.unitRows) + kpi('산정 박스 합계', t.boxes) +
+      kpi('매칭 안 됨', t.unmatched, t.unmatched ? 'bad' : 'ok') + kpi('분할 지점 행', t.split) +
+      kpi('주임단 공란', w.missingManager.length, w.missingManager.length ? 'bad' : '') + kpi('주소 공란', w.missingAddr.length, w.missingAddr.length ? 'bad' : '');
+    $('#aggMeta').textContent = `조직현황 시트: ${agg.meta.orgSheet} · 정산 시트: ${agg.meta.perfSheet} (${agg.meta.perfRows.toLocaleString()}명) · 기준: ${agg.meta.countCol} ÷ ${agg.meta.divisor} 올림 · 별칭 ${Object.keys(agg.meta.aliases).length}개 적용`;
+
+    // 매칭 안 됨
+    if (w.unmatched.length) {
+      $('#unmatchedBox').innerHTML = `<div class="callout warn"><b>매칭 안 된 지점 ${w.unmatched.length}개.</b> 정산 자료에서 같은 이름을 찾지 못해 0건·0박스로 산정됩니다. 정산업적의 지점명이 다른 경우 아래에서 지정하면 별칭으로 저장되어 다음 회차부터 자동 적용됩니다. 실제로 신계약이 없는 지점이면 그대로 두세요.</div>
+        <div class="tbl" style="max-height:300px; overflow:auto"><table class="alias-tbl"><thead><tr><th>본부</th><th>지점</th><th>정산업적 지점명 지정</th><th></th></tr></thead><tbody>
+        ${w.unmatched.map(u => `<tr><td class="small">${esc(u['본부'])}</td><td><b>${esc(u['지점'])}</b></td>
+          <td><select data-alias-for="${esc(u['정규화'])}"><option value="">(선택 또는 입력)</option>${u.suggestions.map(s => `<option>${esc(s)}</option>`).join('')}<option value="__free">직접 입력…</option></select>
+              <input type="text" class="hidden" data-alias-free="${esc(u['정규화'])}" placeholder="정산업적 지점명" style="width:160px"></td>
+          <td><button class="btn ghost sm" data-alias-add="${esc(u['정규화'])}">별칭 추가</button></td></tr>`).join('')}
+        </tbody></table></div>`;
+      A4.qa('[data-alias-for]').forEach(sel => sel.onchange = () => { const free = $(`[data-alias-free="${cssEsc(sel.dataset.aliasFor)}"]`); free.classList.toggle('hidden', sel.value !== '__free'); });
+      A4.qa('[data-alias-add]').forEach(btn => btn.onclick = async () => {
+        const from = btn.dataset.aliasAdd;
+        const sel = $(`[data-alias-for="${cssEsc(from)}"]`); const free = $(`[data-alias-free="${cssEsc(from)}"]`);
+        const to = (sel.value === '__free' ? free.value : sel.value).trim();
+        if (!to) { A4.toast('정산업적 지점명을 선택하거나 입력하세요', 'bad'); return; }
+        await saveAliases(Object.assign({}, config.aliases, { [from]: to }));
+        runAgg();
+      });
+    } else {
+      $('#unmatchedBox').innerHTML = `<div class="callout ok">모든 지점이 정산 자료와 매칭되었습니다.</div>`;
+    }
+    // 정산에만 있는 지점
+    $('#perfOnlyBox').innerHTML = `<summary>정산 자료에만 있는 지점 ${w.perfOnly.length}개 (조직현황에 없음)</summary>
+      <p class="small muted">조직 변동으로 사라진 지점이거나 이름이 바뀐 지점입니다. 위 '매칭 안 됨' 지점의 실제 이름이 여기에 있을 수 있습니다.</p>
+      <div class="tbl" style="max-height:240px; overflow:auto"><table><thead><tr><th>정산업적 지점명</th><th>인원</th><th>건수</th></tr></thead><tbody>
+      ${w.perfOnly.map(p => `<tr><td>${esc(p.name)}</td><td class="num">${p.people}</td><td class="num">${p.count}</td></tr>`).join('')}</tbody></table></div>`;
+    renderPreview();
+
+    // 회차 폼 기본값
+    if (!$('#roundId').value) {
+      let m = null; fileNames.some(n => (m = n.match(/20(\d{2})(\d{2})/)));
+      const d = new Date(); let y = d.getFullYear(), mo = d.getMonth() + 1;
+      if (m) { y = 2000 + +m[1]; mo = +m[2]; }
+      $('#roundId').value = `${y}-${String(mo).padStart(2, '0')}`;
+      $('#roundTitle').value = `${y}년 ${mo}월 A4 발주`;
+      const dl = new Date(); dl.setDate(dl.getDate() + 7); dl.setHours(18, 0, 0, 0);
+      $('#deadline').value = toLocalInput(dl);
+    }
+  }
+  $('#prevQ').addEventListener('input', renderPreview);
+  function renderPreview() {
+    const q = A4.norm($('#prevQ').value);
+    const list = agg.rows.filter(r => !q || A4.norm([r['지점'], r['본부'], r['사업단'], r['담당주임단']].join(' ')).indexOf(q) >= 0);
+    $('#prevBody').innerHTML = list.map(r => `<tr class="${r.kind === '단위' ? 'unit' : ''}"><td class="num">${r.seq}</td><td>${esc(r['본부'])}</td><td>${esc(r['사업단'])}</td><td>${esc(r['지점'])}</td><td class="small">${esc(r['지점_정규화'])}</td><td>${esc(r['담당주임단'])}</td><td class="small">${esc(r['주소'])}</td><td class="num">${esc(r['신계약건수'])}</td><td class="num"><b>${esc(r['산정박스'])}</b></td><td class="num">${r['분할수'] > 1 ? r['분할수'] : ''}</td><td>${r['매칭상태'] === '매칭안됨' ? '<span class="badge bad">매칭안됨</span>' : ''}</td></tr>`).join('');
+  }
+  $('#prevXlsx').onclick = () => {
+    const rid = $('#roundId').value || 'preview';
+    downloadXlsx(buildWorkbook({ round_id: rid, title: $('#roundTitle').value }, agg.rows, [], [], false), `${rid}_지점별 인쇄용지(자동산정 미리보기).xlsx`);
+  };
+
+  $('#createBtn').onclick = async () => {
+    if (!agg) return;
+    const round_id = $('#roundId').value.trim(), title = $('#roundTitle').value.trim(), deadline = $('#deadline').value;
+    if (!/^\d{4}-\d{2}$/.test(round_id)) { A4.toast('회차 ID는 YYYY-MM 형식', 'bad'); return; }
+    if (!deadline) { A4.toast('마감일시를 입력하세요', 'bad'); return; }
+    const replace = $('#replace').checked;
+    if (replace && window.prompt(`기존 회차 ${round_id} 의 데이터(주임단 수정 내역 포함)를 모두 삭제하고 새로 만듭니다.\n계속하려면 회차 ID를 입력하세요.`) !== round_id) return;
+    $('#createBtn').disabled = true; $('#createBtn').textContent = '생성 중…';
+    try {
+      const rows = agg.rows.map(r => { const o = Object.assign({}, r); delete o['분할표식']; return o; });
+      const res = await api('admin.createRound', { round_id, title, deadline, rows, replace, box_divisor: agg.meta.divisor, count_col: agg.meta.countCol });
+      const link = shareLink(res.round.code);
+      $('#createResult').innerHTML = `<div class="callout ok"><b>${esc(res.round.title)}</b> 회차가 생성되었습니다 (${res.rows}행). 주임단 공유 링크:</div>
+        <div class="linkbox"><span>${esc(link)}</span><button class="btn sm" data-copy="${esc(link)}">복사</button></div>`;
+      $('[data-copy]', $('#createResult')).onclick = e => A4.copy(e.target.dataset.copy);
+      A4.toast('회차 생성 완료', 'ok');
+      await loadRounds(res.round.round_id);
+    } catch (e) { A4.toast(e.message, 'bad'); }
+    $('#createBtn').disabled = false; $('#createBtn').textContent = '회차 생성';
+  };
+
+  // ════════════ ② 진행 현황 ════════════
+  async function loadRounds(selectId) {
+    try {
+      const r = await api('admin.rounds'); rounds = r.rounds;
+      $('#roundSel').innerHTML = rounds.slice().reverse().map(x => `<option value="${esc(x.round_id)}">${esc(x.round_id)} · ${esc(x.title)} · ${esc(x.status)}</option>`).join('') || '<option value="">(회차 없음)</option>';
+      if (selectId) { $('#roundSel').value = selectId; showTab('status'); loadStatus(selectId); }
+      else if (cur) $('#roundSel').value = cur.round.round_id;
+    } catch (e) { A4.toast(e.message, 'bad'); }
+  }
+  $('#roundSel').onchange = () => loadStatus($('#roundSel').value);
+  $('#reloadStatus').onclick = () => cur && loadStatus(cur.round.round_id);
+
+  async function loadStatus(roundId) {
+    if (!roundId) return;
+    $('#statusTime').textContent = '불러오는 중…';
+    try {
+      cur = await api('admin.status', { round_id: roundId });
+      Object.keys(adminDirty).forEach(k => delete adminDirty[k]);
+      $('#statusTime').textContent = '조회 ' + A4.fmtDT(cur.server_time);
+      renderStatus();
+    } catch (e) { A4.toast(e.message, 'bad'); }
+  }
+
+  function shareLink(code) { return A4.SITE_URL + '?k=' + encodeURIComponent(code); }
+
+  function renderStatus() {
+    const r = cur.round, rows = cur.rows;
+    const st = r.status;
+    const cls = st === '진행중' ? 'open' : st === '마감' ? 'closed' : 'done';
+    $('#statusBanner').className = 'banner ' + cls;
+    $('#statusBanner').innerHTML = `<span class="badge ${cls === 'open' ? 'ok' : cls === 'closed' ? 'warn' : 'blue'}">${esc(A4.statusLabel[st] || st)}</span><b>${esc(r.title)}</b>
+      <span class="meta">마감 ${esc(A4.fmtDT(r.deadline))}${st === '마감' && r.stored_status === '진행중' ? ' (마감일시 경과로 자동 마감)' : ''}${r.completed_at ? ' · 총무팀 전달 ' + esc(A4.fmtDT(r.completed_at)) + (r.completed_note ? ' · ' + esc(r.completed_note) : '') : ''}</span>`;
+    const link = shareLink(r.code);
+    $('#linkBox').innerHTML = `<span>주임단 링크: ${esc(link)}</span><button class="btn sm" id="copyLink">복사</button>`;
+    $('#copyLink').onclick = () => A4.copy(link);
+
+    const acts = [];
+    acts.push(`<button class="btn ghost" id="actDeadline">마감일시 변경</button>`);
+    if (st === '진행중') acts.push(`<button class="btn warn" id="actClose">지금 마감</button>`);
+    if (st === '마감') acts.push(`<button class="btn ghost" id="actReopen">재개</button>`);
+    acts.push(`<button class="btn ok" id="actXlsx">최종 엑셀 다운로드</button>`);
+    if (st === '마감') acts.push(`<button class="btn blue" id="actComplete">발주요청 완료</button>`);
+    if (st === '발주완료') acts.push(`<button class="btn ghost" id="actUncomplete">완료 취소</button>`);
+    acts.push(`<button class="btn ghost sm" id="actRegen">코드 재생성</button>`);
+    acts.push(`<button class="btn danger sm" id="actDelete">회차 삭제</button>`);
+    $('#roundActions').innerHTML = acts.join('');
+    bind('#actDeadline', async () => {
+      const v = window.prompt('새 마감일시 (YYYY-MM-DD HH:MM)', (r.deadline || '').replace('T', ' ').slice(0, 16)); if (!v) return;
+      await act('admin.setDeadline', { deadline: v.trim().replace(' ', 'T') });
+    });
+    bind('#actClose', () => window.confirm('지금 마감하면 주임단은 조회만 가능합니다. 계속할까요?') && act('admin.close'));
+    bind('#actReopen', async () => {
+      const past = r.deadline && new Date(r.deadline) < new Date();
+      let deadline = '';
+      if (past) { const v = window.prompt('마감일시가 지났습니다. 새 마감일시 (YYYY-MM-DD HH:MM)', toLocalInput(addDays(new Date(), 3)).replace('T', ' ')); if (!v) return; deadline = v.trim().replace(' ', 'T'); }
+      await act('admin.reopen', deadline ? { deadline } : {});
+    });
+    bind('#actComplete', async () => { const note = window.prompt('총무팀 전달 메모 (선택, 주임단 화면에 표시됨)', ''); if (note === null) return; await act('admin.complete', { note }); });
+    bind('#actUncomplete', () => window.confirm('발주요청 완료를 취소하고 마감 상태로 되돌립니다.') && act('admin.uncomplete'));
+    bind('#actRegen', () => window.confirm('접속코드를 새로 만들면 이미 공유한 링크는 열리지 않습니다. 계속할까요?') && act('admin.regenCode'));
+    bind('#actDelete', async () => { const v = window.prompt(`회차 ${r.round_id} 와 모든 수정 내역을 영구 삭제합니다. 회차 ID를 입력하세요.`); if (v !== r.round_id) return; await api('admin.deleteRound', { round_id: r.round_id, confirm_text: v }); cur = null; A4.toast('삭제했습니다'); await loadRounds(); if (rounds.length) loadStatus(rounds[rounds.length - 1].round_id); else { $('#statusBanner').innerHTML = ''; $('#roundActions').innerHTML = ''; } });
+    bind('#actXlsx', () => downloadXlsx(buildWorkbook(r, rows, cur.edits, cur.confirms, true), `${r.round_id}_지점별 인쇄용지 발송요청.xlsx`));
+
+    // KPI
+    const br = rows.filter(x => x.kind === '지점');
+    const sumAuto = br.reduce((s, x) => s + Number(x['산정박스'] || 0), 0);
+    const sumFinal = br.reduce((s, x) => s + Number(x['최종박스'] || 0), 0);
+    const names = new Set(); rows.forEach(x => A4.splitNames(x['최종주임단'] || x['담당주임단']).forEach(n => names.add(n)));
+    const confirmed = new Set(cur.confirms.map(c => c['주임단']));
+    const conf = Array.from(names).filter(n => confirmed.has(n));
+    const unconf = Array.from(names).filter(n => !confirmed.has(n)).sort((a, b) => a.localeCompare(b, 'ko'));
+    const cnt = f => cur.edits.filter(e => e['항목'] === f).length;
+    $('#statusKpis').innerHTML = kpi('지점', br.length) + kpi('산정 박스', sumAuto) + kpi('최종 박스', sumFinal, 'ok') +
+      kpi('확인 완료 주임단', `${conf.length} / ${names.size}`) + kpi('수량 변경', cnt('최종박스')) + kpi('주소 변경', cnt('최종주소')) + kpi('주임단 변경', cnt('최종주임단')) + kpi('매칭안됨', br.filter(x => x['매칭상태'] === '매칭안됨').length, 'bad');
+    $('#unconfCnt').textContent = unconf.length + '명';
+    $('#unconfList').textContent = unconf.join(', ') || '모든 주임단이 확인을 완료했습니다.';
+    $('#copyUnconf').onclick = () => A4.copy(unconf.join(', '));
+    $('#copyConf').onclick = () => A4.copy(conf.join(', '));
+
+    // 변경 내역
+    $('#editCnt').textContent = cur.edits.length + '건';
+    $('#editBody').innerHTML = cur.edits.slice().reverse().map(e => `<tr><td class="small" style="white-space:nowrap">${esc(String(e['일시']).replace('T', ' ').slice(0, 16))}</td><td>${esc(e['지점'])}</td><td>${esc(e['항목']).replace('최종', '')}</td><td class="small">${esc(e['이전값'])}</td><td><b>${esc(e['변경값'])}</b></td><td>${esc(e['수정자'])}</td><td class="small">${esc(e['사유'])}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">변경 내역이 없습니다.</td></tr>';
+    renderRows();
+  }
+  function bind(sel, fn) { const el = $(sel); if (el) el.onclick = fn; }
+  async function act(action, p) {
+    try { const res = await api(action, Object.assign({ round_id: cur.round.round_id }, p || {})); cur.round = res.round; A4.toast('처리되었습니다', 'ok'); await loadRounds(); renderStatus(); }
+    catch (e) { A4.toast(e.message, 'bad'); }
+  }
+
+  $('#rowsQ').addEventListener('input', renderRows); $('#rowsFilter').onchange = renderRows;
+  function renderRows() {
+    if (!cur) return;
+    const q = A4.norm($('#rowsQ').value), f = $('#rowsFilter').value;
+    const editable = cur.round.status !== '발주완료';
+    const list = cur.rows.filter(r => {
+      if (q && A4.norm([r['지점'], r['본부'], r['사업단'], r['최종주임단'], r['담당주임단'], r['최종주소']].join(' ')).indexOf(q) < 0) return false;
+      if (f === 'changed') return !!r['최종수정자'];
+      if (f === 'unmatched') return r['매칭상태'] === '매칭안됨';
+      if (f === 'unconfirmed') return r['확인상태'] !== '확인';
+      if (f === 'zero') return r.kind === '지점' && Number(r['최종박스']) === 0;
+      return true;
+    });
+    $('#rowsBody').innerHTML = list.map(r => {
+      const d = adminDirty[r.row_id] || {}; const cur_ = k => (k in d ? d[k] : r[k]);
+      const isUnit = r.kind !== '지점'; const path = A4.pathOf(r);
+      const label = isUnit ? (r['사업단'] || r['본부']) : r['지점'];
+      const st = [];
+      if (!isUnit && r['매칭상태'] === '매칭안됨') st.push('<span class="badge bad">매칭안됨</span>');
+      if (r['확인상태'] === '확인') st.push('<span class="badge ok">확인</span>');
+      if (r['최종수정자']) st.push(`<span class="badge" title="${esc(r['최종수정일시'])}">${esc(r['최종수정자'])}</span>`);
+      const dis = editable ? '' : 'disabled';
+      return `<tr class="${isUnit ? 'unit' : ''}${Object.keys(d).length ? ' changed' : ''}" data-id="${esc(r.row_id)}">
+        <td><div class="path">${esc(path.slice(0, -1).join(' › '))}${path.length > 1 ? ' › ' : ''}<b>${esc(label)}</b>${isUnit ? ' <span class="badge">단위</span>' : (r['분할수'] > 1 ? ` <span class="badge soft">${esc(r['분할수'])}분할</span>` : '')}</div></td>
+        <td class="small">${esc(r['관리자'])}</td>
+        <td class="addr"><input type="text" data-f="최종주소" value="${esc(cur_('최종주소'))}" ${dis}>${cur_('최종주소') !== r['주소'] ? `<span class="was">원본: ${esc(r['주소'])}</span>` : ''}</td>
+        <td><input type="text" data-f="최종주임단" value="${esc(cur_('최종주임단'))}" style="width:110px" ${dis}></td>
+        <td class="num">${isUnit ? '-' : esc(r['신계약건수'])}</td>
+        <td class="num">${isUnit ? '-' : esc(r['산정박스'])}</td>
+        <td class="num">${isUnit ? '-' : `<input type="number" min="0" step="1" data-f="최종박스" value="${esc(cur_('최종박스'))}" ${dis}>`}</td>
+        <td><input type="text" data-f="비고" value="${esc(cur_('비고'))}" style="width:120px" ${dis}></td>
+        <td style="white-space:nowrap">${st.join(' ')}${Object.keys(d).length ? `<button class="btn sm rowsave" data-save="${esc(r.row_id)}">저장</button>` : ''}</td>
+      </tr>`;
+    }).join('');
+  }
+  $('#rowsBody').addEventListener('input', e => {
+    const inp = e.target.closest('input[data-f]'); if (!inp) return;
+    const tr = inp.closest('tr'), id = tr.dataset.id, f = inp.dataset.f, r = cur.rows.find(x => x.row_id === id);
+    let v = inp.value; if (f === '최종박스') v = v === '' ? '' : Math.max(0, Math.floor(Number(v))); else v = v.trim();
+    adminDirty[id] = adminDirty[id] || {};
+    if (String(v) === String(r[f])) delete adminDirty[id][f]; else adminDirty[id][f] = v;
+    if (!Object.keys(adminDirty[id]).length) delete adminDirty[id];
+    tr.classList.toggle('changed', !!adminDirty[id]);
+    let btn = tr.querySelector('[data-save]');
+    if (adminDirty[id] && !btn) { btn = document.createElement('button'); btn.className = 'btn sm rowsave'; btn.dataset.save = id; btn.textContent = '저장'; tr.lastElementChild.appendChild(btn); }
+    if (!adminDirty[id] && btn) btn.remove();
+  });
+  $('#rowsBody').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-save]'); if (!btn) return;
+    const id = btn.dataset.save;
+    const reason = window.prompt('변경 사유 (선택)', '담당자 수정'); if (reason === null) return;
+    btn.disabled = true;
+    try {
+      const res = await api('row.save', { round_id: cur.round.round_id, row_id: id, changes: adminDirty[id], editor: '담당자', reason });
+      const i = cur.rows.findIndex(x => x.row_id === id); cur.rows[i] = res.row; delete adminDirty[id];
+      A4.toast('저장되었습니다', 'ok'); await loadStatus(cur.round.round_id);
+    } catch (err) { A4.toast(err.message, 'bad'); btn.disabled = false; }
+  });
+
+  // ════════════ ③ 설정 ════════════
+  function fillConfigForm() {
+    $('#cfgDivisor').value = config.box_divisor; $('#cfgCountCol').value = config.count_col;
+    $('#cfgCodeMode').value = config.code_mode; $('#cfgFixed').value = config.fixed_code;
+    renderAliases();
+  }
+  function renderAliases() {
+    const a = config.aliases || {};
+    $('#aliasBody').innerHTML = Object.keys(a).map(k => `<tr><td>${esc(k)}</td><td>${esc(a[k])}</td><td><button class="btn ghost sm" data-del="${esc(k)}">삭제</button></td></tr>`).join('') || '<tr><td colspan="3" class="muted">등록된 별칭이 없습니다.</td></tr>';
+    A4.qa('[data-del]').forEach(b => b.onclick = async () => { const n = Object.assign({}, config.aliases); delete n[b.dataset.del]; await saveAliases(n); if (agg) runAgg(); });
+  }
+  $('#aliasAdd').onclick = async () => {
+    const from = $('#aliasFrom').value.trim(), to = $('#aliasTo').value.trim();
+    if (!from || !to) return;
+    await saveAliases(Object.assign({}, config.aliases, { [from]: to }));
+    $('#aliasFrom').value = ''; $('#aliasTo').value = ''; if (agg) runAgg();
+  };
+  async function saveAliases(aliases) {
+    try { const r = await api('admin.setConfig', { config: { aliases } }); config = r.config; renderAliases(); A4.toast('별칭을 저장했습니다', 'ok'); }
+    catch (e) { A4.toast(e.message, 'bad'); }
+  }
+  $('#cfgSave').onclick = async () => {
+    const patch = { box_divisor: Number($('#cfgDivisor').value), count_col: $('#cfgCountCol').value.trim(), code_mode: $('#cfgCodeMode').value, fixed_code: $('#cfgFixed').value.trim() };
+    const pw = $('#cfgPw').value.trim(); if (pw) patch.admin_password = pw;
+    try { const r = await api('admin.setConfig', { config: patch }); config = r.config; fillConfigForm(); $('#cfgPw').value = ''; A4.toast('설정을 저장했습니다', 'ok'); if (agg) runAgg(); }
+    catch (e) { A4.toast(e.message, 'bad'); }
+  };
+
+  // ════════════ 엑셀 생성 ════════════
+  const OUT_COLS = ['부문', '본부', '사업단', '지점', '지점(정규화)', '관리자', '직책', '담당주임단', '전화번호', 'FAX', '주소', '수량'];
+  function buildWorkbook(round, rows, edits, confirms, final) {
+    const wb = XLSX.utils.book_new();
+    const sorted = rows.slice().sort((a, b) => a.seq - b.seq);
+    const main = [['RP채널 영업조직 현황 ' + (round.title ? '- ' + round.title : '')], [], OUT_COLS];
+    sorted.forEach(r => {
+      const isUnit = r.kind !== '지점';
+      main.push([r['부문'], r['본부'], r['사업단'], r['지점'], r['지점_정규화'], r['관리자'], r['직책'],
+        final ? (r['최종주임단'] || r['담당주임단']) : r['담당주임단'], r['전화번호'], r['FAX'],
+        final ? (r['최종주소'] || r['주소']) : r['주소'],
+        isUnit ? '' : Number(final ? (r['최종박스'] === '' ? r['산정박스'] : r['최종박스']) : r['산정박스'])]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(main);
+    ws['!cols'] = [12, 14, 14, 20, 20, 8, 12, 12, 14, 14, 48, 6].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, '발송요청');
+
+    const basis = [['본부', '사업단', '지점', '지점(정규화)', '분할수', '매칭상태', '신계약건수', '산정박스', '최종박스', '확인상태', '최종수정자', '최종수정일시', '비고']];
+    sorted.filter(r => r.kind === '지점').forEach(r => basis.push([r['본부'], r['사업단'], r['지점'], r['지점_정규화'], r['분할수'], r['매칭상태'], r['신계약건수'], r['산정박스'], final ? r['최종박스'] : '', r['확인상태'] || '', r['최종수정자'] || '', r['최종수정일시'] || '', r['비고'] || '']));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(basis), '집계근거');
+
+    if (final) {
+      const eh = [['일시', '지점', '항목', '이전값', '변경값', '수정자', '사유']];
+      edits.forEach(e => eh.push([String(e['일시']).replace('T', ' '), e['지점'], String(e['항목']).replace('최종', ''), e['이전값'], e['변경값'], e['수정자'], e['사유']]));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(eh), '변경이력');
+      const ch = [['주임단', '확인일시', '담당행수']];
+      confirms.forEach(c => ch.push([c['주임단'], String(c['확인일시']).replace('T', ' '), c['담당행수']]));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ch), '확인현황');
+    }
+    return wb;
+  }
+  function downloadXlsx(wb, name) { XLSX.writeFile(wb, name); }
+
+  // ── util
+  function kpi(l, v, c) { return `<div class="kpi"><small>${esc(l)}</small><b class="${c || ''}">${esc(v)}</b></div>`; }
+  function toLocalInput(d) { const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
+  function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); x.setHours(18, 0, 0, 0); return x; }
+  function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
+})();
+</script>
+</body>
+</html>

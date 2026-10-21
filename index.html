@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>A4 발주 확인</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>지점별 A4 발주 확인</h1>
+    <span class="sub" id="roundTitle"></span>
+    <span class="spacer"></span>
+    <span class="sub muted" id="loadState">불러오는 중…</span>
+  </header>
+
+  <!-- 접속코드 입력 -->
+  <section id="codeForm" class="code-form card hidden">
+    <h2>접속코드를 입력하세요</h2>
+    <p class="hint">담당자가 공유한 링크에 포함된 코드입니다. 예: 2610-h7kq</p>
+    <input type="text" id="codeInput" placeholder="0000-xxxx" autocomplete="off" autocapitalize="off">
+    <div class="actions" style="justify-content:center;margin-top:12px"><button class="btn" id="codeGo">열기</button></div>
+    <p id="codeErr" class="small" style="color:var(--bad)"></p>
+  </section>
+
+  <!-- 본문 -->
+  <section id="main" class="hidden">
+    <div id="banner" class="banner"></div>
+
+    <div class="search">
+      <input type="search" id="q" placeholder="본인 이름, 주소, 지점명, 본부로 검색" autocomplete="off">
+      <button class="btn ghost" id="showAll">전체</button>
+    </div>
+    <p class="hint" id="resultHint">이름(담당주임단)이나 주소 일부를 입력하면 담당 지점이 나옵니다. 본부 › 사업단 › 지점 순으로 정렬됩니다.</p>
+
+    <div class="tbl cards" id="tblWrap">
+      <table>
+        <thead><tr>
+          <th>본부 › 사업단 › 지점</th><th>관리자</th><th>주소</th><th>담당주임단</th><th>신계약</th><th>수량(박스)</th><th>비고</th><th>상태</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <p class="hint small" id="legend">
+      수량은 신계약(생명/장기) 건수 ÷ 30 올림으로 자동 산정되었습니다. 바뀐 값은 노란 배경으로 표시되며, 저장 시 변경 사유를 함께 남깁니다.
+      <span class="badge bad">매칭안됨</span> 은 정산 자료에서 지점명을 찾지 못해 0건으로 산정된 지점입니다. 실제 수량을 직접 입력해 주세요.
+    </p>
+  </section>
+
+  <p class="footer">문의: 설계사서비스기획팀 · <a href="admin.html">관리자</a></p>
+</div>
+
+<!-- 저장 바 -->
+<div class="savebar hidden" id="savebar">
+  <div class="in">
+    <span class="cnt" id="chgCnt">변경 0건</span>
+    <select id="editor"><option value="">수정자(본인 이름) 선택</option></select>
+    <input type="text" id="editorFree" class="hidden" placeholder="이름 직접 입력">
+    <input type="text" id="reason" placeholder="변경 사유 (예: 재고 보유, 주소 이전)">
+    <button class="btn ghost" id="discard">취소</button>
+    <button class="btn" id="save">저장</button>
+    <button class="btn ok" id="confirmBtn" title="표시된 행을 확인 완료 처리">확인 완료</button>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+(function () {
+  const $ = A4.q, esc = A4.esc;
+  let code = '', round = null, rows = [], confirms = [], view = [];
+  const dirty = {}; // row_id -> {field: value}
+
+  // ── 진입
+  const params = new URLSearchParams(location.search);
+  code = (params.get('k') || params.get('code') || '').trim();
+  if (!code) { try { code = sessionStorage.getItem('a4code') || ''; } catch (e) {} }
+  if (code) load(); else showCodeForm();
+
+  $('#codeGo').onclick = () => { code = $('#codeInput').value.trim(); if (code) load(); };
+  $('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#codeGo').click(); });
+
+  function showCodeForm(err) {
+    $('#codeForm').classList.remove('hidden'); $('#main').classList.add('hidden');
+    $('#loadState').textContent = ''; $('#codeErr').textContent = err || '';
+    setTimeout(() => $('#codeInput').focus(), 50);
+  }
+
+  async function load() {
+    $('#loadState').textContent = '불러오는 중…';
+    try {
+      const res = await A4.api('round.get', { code });
+      round = res.round; rows = res.rows; confirms = res.confirms || [];
+      try { sessionStorage.setItem('a4code', code); } catch (e) {}
+      if (!params.get('k')) history.replaceState(null, '', '?k=' + encodeURIComponent(code));
+      $('#codeForm').classList.add('hidden'); $('#main').classList.remove('hidden');
+      $('#roundTitle').textContent = round.title;
+      $('#loadState').textContent = rows.filter(r => r.kind === '지점').length + '개 지점';
+      renderBanner(); fillEditors();
+      const q = params.get('q'); if (q) { $('#q').value = q; }
+      render();
+    } catch (e) {
+      showCodeForm(e.message);
+    }
+  }
+
+  function renderBanner() {
+    const b = $('#banner');
+    const st = round.status;
+    const cls = st === '진행중' ? 'open' : st === '마감' ? 'closed' : 'done';
+    let html = '';
+    if (st === '진행중') html = `<span class="badge ok">진행중</span><b>${esc(round.title)}</b><span class="meta">마감 ${esc(A4.fmtDT(round.deadline))} 까지 수정할 수 있습니다.</span>`;
+    else if (st === '마감') html = `<span class="badge warn">마감 · 읽기 전용</span><b>${esc(round.title)}</b><span class="meta">${esc(A4.fmtDT(round.deadline))}에 마감되었습니다. 변경이 필요하면 담당자에게 연락해 주세요.</span>`;
+    else html = `<span class="badge blue">발주요청 완료</span><b>${esc(round.title)}</b><span class="meta">${esc(A4.fmtDT(round.completed_at))} 총무팀에 발주 요청을 전달했습니다.${round.completed_note ? ' ' + esc(round.completed_note) : ''}</span>`;
+    b.className = 'banner ' + cls; b.innerHTML = html;
+  }
+
+  function editable() { return round && round.status === '진행중'; }
+
+  function fillEditors() {
+    const names = new Set();
+    rows.forEach(r => A4.splitNames(r['최종주임단'] || r['담당주임단']).forEach(n => names.add(n)));
+    const sel = $('#editor');
+    sel.innerHTML = '<option value="">수정자(본인 이름) 선택</option>' +
+      Array.from(names).sort((a, b) => a.localeCompare(b, 'ko')).map(n => `<option>${esc(n)}</option>`).join('') +
+      '<option value="__free">직접 입력…</option>';
+  }
+  $('#editor').onchange = () => { $('#editorFree').classList.toggle('hidden', $('#editor').value !== '__free'); };
+  function editorName() { const v = $('#editor').value; return (v === '__free' ? $('#editorFree').value : v).trim(); }
+
+  // ── 검색/표시
+  $('#q').addEventListener('input', render);
+  $('#showAll').onclick = () => { $('#q').value = ''; render(true); };
+
+  function matches(r, q) {
+    const hay = A4.norm([r['최종주임단'], r['담당주임단'], r['최종주소'], r['주소'], r['지점'], r['본부'], r['사업단'], r['관리자']].join(' '));
+    return q.split(/\s+/).filter(Boolean).every(t => hay.indexOf(A4.norm(t)) >= 0);
+  }
+
+  function render(all) {
+    const q = $('#q').value.trim();
+    if (!q && !all) { view = []; $('#tbody').innerHTML = ''; $('#resultHint').textContent = '이름(담당주임단)이나 주소 일부를 입력하면 담당 지점이 나옵니다. 본부 › 사업단 › 지점 순으로 정렬됩니다.'; updateBar(); return; }
+    view = rows.filter(r => !q || matches(r, q)).sort((a, b) => a.seq - b.seq);
+    // 지점이 검색된 본부·사업단의 단위 행도 함께 보여 계층이 보이도록
+    if (q) {
+      const keys = new Set(view.map(r => r['본부'] + '|' + r['사업단']));
+      const parents = rows.filter(r => r.kind === '단위' && (keys.has(r['본부'] + '|' + r['사업단']) || keys.has(r['본부'] + '|')) && !view.includes(r));
+      // 본부 단위 행(사업단 비어있음)은 해당 본부에 결과가 있으면 포함
+      const hb = new Set(view.map(r => r['본부']));
+      parents.forEach(p => { if ((p['사업단'] === '' && hb.has(p['본부'])) || keys.has(p['본부'] + '|' + p['사업단'])) view.push(p); });
+      view.sort((a, b) => a.seq - b.seq);
+    }
+    const nB = view.filter(r => r.kind === '지점').length, nU = view.length - nB;
+    $('#resultHint').textContent = q ? `검색 결과: 지점 ${nB}개${nU ? ' · 본부/사업단 단위 ' + nU + '개' : ''}` : `전체 ${nB}개 지점 · 본부/사업단 단위 ${nU}개`;
+    const ro = !editable();
+    const confirmedNames = new Set(confirms.map(c => c['주임단']));
+    $('#tbody').innerHTML = view.map(r => {
+      const d = dirty[r.row_id] || {};
+      const cur = f => (f in d ? d[f] : r[f]);
+      const isUnit = r.kind !== '지점';
+      const path = A4.pathOf(r);
+      const label = isUnit ? (r['사업단'] || r['본부']) : r['지점'];
+      const parent = isUnit ? path.slice(0, -1) : path.slice(0, -1);
+      const splitTag = r['분할표식'] ? ` <span class="badge soft" title="한 지점이 여러 주소로 나뉨. 지점 합계를 ${esc(r['분할수'])}곳에 균등 배분">${esc(r['분할표식'])} · ${esc(r['분할수'])}분할</span>` : (r['분할수'] > 1 ? ` <span class="badge soft">${esc(r['분할수'])}분할</span>` : '');
+      const boxWas = !isUnit && String(cur('최종박스')) !== String(r['산정박스']) ? `<span class="was">자동산정 ${esc(r['산정박스'])}</span>` : '';
+      const addrWas = cur('최종주소') !== r['주소'] ? `<span class="was">원본: ${esc(r['주소'])}</span>` : '';
+      const mgrWas = cur('최종주임단') !== r['담당주임단'] ? `<span class="was">원본: ${esc(r['담당주임단'])}</span>` : '';
+      const status = [];
+      if (!isUnit && r['매칭상태'] === '매칭안됨') status.push('<span class="badge bad" title="정산 자료에 이 지점명이 없어 0건으로 산정됨">매칭안됨</span>');
+      if (r['확인상태'] === '확인') status.push('<span class="badge ok">확인</span>');
+      if (r['최종수정자']) status.push(`<span class="badge" title="${esc(r['최종수정일시'])}">${esc(r['최종수정자'])} 수정</span>`);
+      const changed = Object.keys(d).length ? ' changed' : '';
+      return `<tr class="${isUnit ? 'unit' : ''}${changed}" data-id="${esc(r.row_id)}">
+        <td class="full"><div class="path">${esc(parent.join(' › '))}${parent.length ? ' › ' : ''}<b>${esc(label)}</b>${isUnit ? ' <span class="badge">' + (r['사업단'] ? '사업단' : '본부') + ' 단위</span>' : splitTag}</div></td>
+        <td data-l="관리자">${esc(r['관리자'])}<span class="muted small"> ${esc(r['직책'])}</span></td>
+        <td class="addr" data-l="주소"><input type="text" data-f="최종주소" value="${esc(cur('최종주소'))}" ${ro ? 'disabled' : ''}>${addrWas}</td>
+        <td data-l="주임단"><input type="text" data-f="최종주임단" value="${esc(cur('최종주임단'))}" ${ro ? 'disabled' : ''}>${mgrWas}</td>
+        <td class="num" data-l="신계약">${isUnit ? '<span class="muted">-</span>' : esc(fmtNum(r['신계약건수']))}</td>
+        <td class="num" data-l="수량">${isUnit ? '<span class="muted">대상 외</span>' : `<input type="number" min="0" step="1" data-f="최종박스" value="${esc(cur('최종박스'))}" ${ro ? 'disabled' : ''}>${boxWas}`}</td>
+        <td data-l="비고"><input type="text" data-f="비고" value="${esc(cur('비고'))}" placeholder="${ro ? '' : '메모'}" ${ro ? 'disabled' : ''}></td>
+        <td data-l="상태">${status.join(' ') || '<span class="muted small">미확인</span>'}</td>
+      </tr>`;
+    }).join('');
+    updateBar();
+  }
+  function fmtNum(n) { n = Number(n); return isFinite(n) ? (Math.round(n * 100) / 100).toLocaleString('ko-KR') : ''; }
+
+  // ── 편집 추적
+  $('#tbody').addEventListener('input', e => {
+    const inp = e.target.closest('input[data-f]'); if (!inp) return;
+    const tr = inp.closest('tr'); const id = tr.dataset.id; const f = inp.dataset.f;
+    const r = rows.find(x => x.row_id === id); if (!r) return;
+    let v = inp.value;
+    if (f === '최종박스') { v = v === '' ? '' : Math.max(0, Math.floor(Number(v))); }
+    else v = v.trim();
+    dirty[id] = dirty[id] || {};
+    if (String(v) === String(r[f])) delete dirty[id][f]; else dirty[id][f] = v;
+    if (!Object.keys(dirty[id]).length) delete dirty[id];
+    tr.classList.toggle('changed', !!dirty[id]);
+    updateBar();
+  });
+
+  function updateBar() {
+    const n = Object.keys(dirty).length;
+    $('#chgCnt').textContent = `변경 ${n}건`;
+    const show = editable() && (n > 0 || view.length > 0);
+    $('#savebar').classList.toggle('hidden', !show);
+    $('#save').disabled = n === 0; $('#discard').disabled = n === 0;
+    $('#confirmBtn').classList.toggle('hidden', view.length === 0);
+    $('#reason').classList.toggle('hidden', n === 0);
+  }
+
+  $('#discard').onclick = () => { Object.keys(dirty).forEach(k => delete dirty[k]); render(!$('#q').value.trim()); };
+
+  $('#save').onclick = async () => {
+    const editor = editorName(); const reason = $('#reason').value.trim();
+    if (!editor) { A4.toast('수정자(본인 이름)를 선택해 주세요', 'bad'); $('#editor').focus(); return; }
+    if (!reason) { A4.toast('변경 사유를 입력해 주세요', 'bad'); $('#reason').focus(); return; }
+    const ids = Object.keys(dirty);
+    $('#save').disabled = true; $('#save').textContent = '저장 중…';
+    let ok = 0, fail = [];
+    for (const id of ids) {
+      try {
+        const res = await A4.api('row.save', { code, row_id: id, changes: dirty[id], editor, reason });
+        const i = rows.findIndex(x => x.row_id === id); if (i >= 0) rows[i] = res.row;
+        delete dirty[id]; ok++;
+      } catch (e) { fail.push((rows.find(x => x.row_id === id) || {})['지점'] + ': ' + e.message); }
+    }
+    $('#save').textContent = '저장';
+    if (fail.length) A4.toast(`${ok}건 저장, ${fail.length}건 실패: ${fail[0]}`, 'bad');
+    else { A4.toast(`${ok}건 저장되었습니다`, 'ok'); $('#reason').value = ''; }
+    render(!$('#q').value.trim());
+  };
+
+  $('#confirmBtn').onclick = async () => {
+    const editor = editorName();
+    if (!editor) { A4.toast('본인 이름을 선택해 주세요', 'bad'); $('#editor').focus(); return; }
+    if (Object.keys(dirty).length) { A4.toast('먼저 변경 내용을 저장하거나 취소해 주세요', 'bad'); return; }
+    const ids = view.map(r => r.row_id);
+    if (!window.confirm(`표시된 ${ids.length}개 행을 "${editor}" 이름으로 확인 완료 처리합니다. 계속할까요?`)) return;
+    try {
+      const res = await A4.api('confirm', { code, editor, row_ids: ids });
+      confirms.push({ 주임단: editor, 확인일시: res.at });
+      view.forEach(r => { r['확인상태'] = '확인'; });
+      A4.toast(`${res.confirmed}개 행 확인 완료`, 'ok'); render(!$('#q').value.trim());
+    } catch (e) { A4.toast(e.message, 'bad'); }
+  };
+})();
+</script>
+</body>
+</html>
