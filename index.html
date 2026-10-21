@@ -46,13 +46,18 @@
       </table>
     </div>
 
-    <p class="hint small" id="legend">
-      바뀐 값은 노란 배경으로 표시되며, 저장 시 변경 사유를 함께 남깁니다.
-      <span class="badge bad">매칭안됨</span> 은 정산 자료에서 지점명을 찾지 못해 수량이 0으로 산정된 지점입니다. 실제 수량을 직접 입력해 주세요.
-      <span class="badge soft">B · 2분할</span> 처럼 표시된 지점은 한 지점이 주소 여러 곳으로 나뉜 경우입니다. 지점 합계 건수를 주소 수로 나눠 각 행에 배분했으니, 한 주소로 몰아 받으려면 그 행의 수량을 올리고 나머지 행은 0으로 고치세요.
-      다른 주임단이 담당하는 짝 주소도 <span class="badge warn">같은 지점</span> 표시와 함께 나오며, 수정하면 해당 주임단에게도 보입니다.
-      지점 합계 수량을 주소 수로 나눈 값이 각 행의 자동산정 수량입니다.
-    </p>
+    <div class="legend" id="legend">
+      <h3>이용 안내</h3>
+      <ul>
+        <li><b>수정</b>: 주소·담당주임단·수량·비고 칸을 바로 고치면 노란 배경으로 표시됩니다. 하단에서 본인 이름과 변경 사유를 넣고 <b>저장</b>을 누르세요.</li>
+        <li><b>확인 완료</b>: 고칠 내용이 없어도 <b>확인 완료</b>를 눌러 주세요. 담당자가 확인 여부를 파악합니다.</li>
+        <li><span class="badge bad">매칭안됨</span> 정산 자료에서 지점명을 찾지 못해 수량이 0으로 산정된 지점입니다. 실제 필요한 수량을 직접 입력해 주세요.</li>
+        <li><span class="badge soft">B · 2분할</span> 한 지점이 주소 여러 곳으로 나뉜 경우입니다. 지점 수량을 주소 수로 나눠 각 행에 배분했습니다.</li>
+        <li>한 주소로 몰아 받으려면 그 행의 수량을 올리고 나머지 행은 0으로 고치세요.</li>
+        <li><span class="badge warn">같은 지점</span> 다른 주임단이 담당하는 짝 주소입니다. 함께 표시되며, 수정하면 해당 주임단에게도 보입니다.</li>
+        <li>마감 후에는 조회만 가능합니다. 변경이 필요하면 담당자에게 연락해 주세요.</li>
+      </ul>
+    </div>
   </section>
 
   <p class="footer">문의: RP영업지원팀 안다솜 과장</p>
@@ -129,8 +134,8 @@
     rows.forEach(r => A4.splitNames(r['최종주임단'] || r['담당주임단']).forEach(n => names.add(n)));
     const sel = $('#editor');
     sel.innerHTML = '<option value="">수정자(본인 이름) 선택</option>' +
-      Array.from(names).sort((a, b) => a.localeCompare(b, 'ko')).map(n => `<option>${esc(n)}</option>`).join('') +
-      '<option value="__free">직접 입력…</option>';
+      '<option value="__free">직접 입력…</option>' +
+      Array.from(names).sort((a, b) => a.localeCompare(b, 'ko')).map(n => `<option>${esc(n)}</option>`).join('');
   }
   $('#editor').onchange = () => { $('#editorFree').classList.toggle('hidden', $('#editor').value !== '__free'); };
   function editorName() { const v = $('#editor').value; return (v === '__free' ? $('#editorFree').value : v).trim(); }
@@ -191,10 +196,10 @@
       return `<tr class="${isUnit ? 'unit' : ''}${changed}" data-id="${esc(r.row_id)}">
         <td class="full"><div class="path">${esc(parent.join(' › '))}${parent.length ? ' › ' : ''}<b>${esc(label)}</b>${isUnit ? ' <span class="badge">' + (r['사업단'] ? '사업단' : '본부') + ' 단위</span>' : splitTag}</div></td>
         <td data-l="관리자">${esc(r['관리자'])}<span class="muted small"> ${esc(r['직책'])}</span></td>
-        <td class="addr" data-l="주소"><input type="text" data-f="최종주소" value="${esc(cur('최종주소'))}" ${ro ? 'disabled' : ''}>${addrWas}</td>
-        <td data-l="주임단"><input type="text" data-f="최종주임단" value="${esc(cur('최종주임단'))}" ${ro ? 'disabled' : ''}>${mgrWas}</td>
+        <td class="addr" data-l="주소"><input type="text" data-f="최종주소" value="${esc(cur('최종주소'))}" title="${esc(cur('최종주소'))}" ${ro ? 'disabled' : ''}>${addrWas}</td>
+        <td class="mgr" data-l="주임단"><input type="text" data-f="최종주임단" value="${esc(cur('최종주임단'))}" ${ro ? 'disabled' : ''}>${mgrWas}</td>
         <td class="num" data-l="수량">${isUnit ? '<span class="muted">대상 외</span>' : `<input type="number" min="0" step="1" data-f="최종박스" value="${esc(cur('최종박스'))}" ${ro ? 'disabled' : ''}>${boxWas}`}</td>
-        <td data-l="비고"><input type="text" data-f="비고" value="${esc(cur('비고'))}" placeholder="${ro ? '' : '메모'}" ${ro ? 'disabled' : ''}></td>
+        <td class="note" data-l="비고"><input type="text" data-f="비고" value="${esc(cur('비고'))}" placeholder="${ro ? '' : '메모'}" ${ro ? 'disabled' : ''}></td>
         <td data-l="상태">${status.join(' ') || '<span class="muted small">미확인</span>'}</td>
       </tr>`;
     }).join('');
