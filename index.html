@@ -50,6 +50,7 @@
       수량은 신계약(생명/장기) 건수 ÷ 30 올림으로 자동 산정되었습니다. 바뀐 값은 노란 배경으로 표시되며, 저장 시 변경 사유를 함께 남깁니다.
       <span class="badge bad">매칭안됨</span> 은 정산 자료에서 지점명을 찾지 못해 0건으로 산정된 지점입니다. 실제 수량을 직접 입력해 주세요.
       <span class="badge soft">B · 2분할</span> 처럼 표시된 지점은 한 지점이 주소 여러 곳으로 나뉜 경우입니다. 지점 합계 건수를 주소 수로 나눠 각 행에 배분했으니, 한 주소로 몰아 받으려면 그 행의 수량을 올리고 나머지 행은 0으로 고치세요.
+      다른 주임단이 담당하는 짝 주소도 <span class="badge warn">같은 지점</span> 표시와 함께 나오며, 수정하면 해당 주임단에게도 보입니다.
     </p>
   </section>
 
@@ -145,7 +146,15 @@
   function render(all) {
     const q = $('#q').value.trim();
     if (!q && !all) { view = []; $('#tbody').innerHTML = ''; $('#resultHint').textContent = '이름(담당주임단)이나 주소 일부를 입력하면 담당 지점이 나옵니다. 본부 › 사업단 › 지점 순으로 정렬됩니다.'; updateBar(); return; }
+    rows.forEach(r => { r._sibling = false; });
     view = rows.filter(r => !q || matches(r, q)).sort((a, b) => a.seq - b.seq);
+    // 분할 지점(A/B/C)은 검색에 걸린 행의 짝 행(다른 주소·다른 주임단)도 모두 함께 표시
+    if (q) {
+      const groups = new Set(view.filter(r => r.kind === '지점' && Number(r['분할수']) > 1).map(r => r['본부'] + '|' + r['지점_정규화']));
+      rows.forEach(r => {
+        if (r.kind === '지점' && groups.has(r['본부'] + '|' + r['지점_정규화']) && !view.includes(r)) { r._sibling = true; view.push(r); }
+      });
+    }
     // 지점이 검색된 본부·사업단의 단위 행도 함께 보여 계층이 보이도록
     if (q) {
       const keys = new Set(view.map(r => r['본부'] + '|' + r['사업단']));
@@ -155,8 +164,8 @@
       parents.forEach(p => { if ((p['사업단'] === '' && hb.has(p['본부'])) || keys.has(p['본부'] + '|' + p['사업단'])) view.push(p); });
       view.sort((a, b) => a.seq - b.seq);
     }
-    const nB = view.filter(r => r.kind === '지점').length, nU = view.length - nB;
-    $('#resultHint').textContent = q ? `검색 결과: 지점 ${nB}개${nU ? ' · 본부/사업단 단위 ' + nU + '개' : ''}` : `전체 ${nB}개 지점 · 본부/사업단 단위 ${nU}개`;
+    const nB = view.filter(r => r.kind === '지점').length, nU = view.filter(r => r.kind !== '지점').length, nS = view.filter(r => r._sibling).length;
+    $('#resultHint').textContent = q ? `검색 결과: 지점 ${nB}개${nS ? ` (분할 지점의 다른 주소 ${nS}행 포함)` : ''}${nU ? ' · 본부/사업단 단위 ' + nU + '개' : ''}` : `전체 ${nB}개 지점 · 본부/사업단 단위 ${nU}개`;
     const ro = !editable();
     const confirmedNames = new Set(confirms.map(c => c['주임단']));
     $('#tbody').innerHTML = view.map(r => {
@@ -175,6 +184,7 @@
       const addrWas = cur('최종주소') !== r['주소'] ? `<span class="was">원본: ${esc(r['주소'])}</span>` : '';
       const mgrWas = cur('최종주임단') !== r['담당주임단'] ? `<span class="was">원본: ${esc(r['담당주임단'])}</span>` : '';
       const status = [];
+      if (r._sibling) status.push(`<span class="badge warn" title="검색어와 직접 일치하지 않지만 같은 지점의 다른 주소라서 함께 표시">같은 지점 · ${esc(r['최종주임단'] || r['담당주임단'] || '담당자 미지정')} 담당</span>`);
       if (!isUnit && r['매칭상태'] === '매칭안됨') status.push('<span class="badge bad" title="정산 자료에 이 지점명이 없어 0건으로 산정됨">매칭안됨</span>');
       if (r['확인상태'] === '확인') status.push('<span class="badge ok">확인</span>');
       if (r['최종수정자']) status.push(`<span class="badge" title="${esc(r['최종수정일시'])}">${esc(r['최종수정자'])} 수정</span>`);
