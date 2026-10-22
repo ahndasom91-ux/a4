@@ -138,7 +138,27 @@
       '<option value="__free">직접 입력…</option>' +
       Array.from(names).sort((a, b) => a.localeCompare(b, 'ko')).map(n => `<option>${esc(n)}</option>`).join('');
   }
+  // 검색어가 주임단 이름과 일치하면 수정자 선택을 그 이름으로 자동 세팅 (직접 고른 값은 덮어쓰지 않음)
+  let editorAuto = false;
+  function autoPickEditor(q) {
+    const sel = $('#editor');
+    if (sel.value && !editorAuto) return; // 사용자가 직접 선택한 상태
+    const names = Array.from(sel.options).map(o => o.value).filter(v => v && v !== '__free');
+    const nq = A4.norm(q);
+    let hit = null;
+    if (nq) {
+      const toks = String(q).split(/\s+/).map(A4.norm).filter(Boolean);
+      hit = names.find(n => toks.includes(A4.norm(n))) || null; // 토큰 완전 일치
+      if (!hit) { const part = names.filter(n => A4.norm(n).indexOf(nq) >= 0); if (part.length === 1) hit = part[0]; } // 유일한 부분 일치
+    }
+    const next = hit || '';
+    if (sel.value === next) return;
+    sel.value = next; editorAuto = !!hit;
+    sel.dispatchEvent(new Event('change'));
+    editorAuto = !!hit; // change 핸들러가 플래그를 지우므로 다시 표시
+  }
   $('#editor').onchange = () => {
+    editorAuto = false;
     $('#editorFree').classList.toggle('hidden', $('#editor').value !== '__free');
     // 이름을 고르면 그 사람 담당 행을 자동으로 체크 (이미 체크한 것이 없을 때만)
     const name = editorName();
@@ -170,7 +190,7 @@
 
   function render(all) {
     const q = $('#q').value.trim();
-    if (!q && !all) { view = []; $('#tbody').innerHTML = ''; $('#resultHint').textContent = '이름(담당주임단)이나 주소 일부를 입력하면 담당 지점이 나옵니다. 본부 › 사업단 › 지점 순으로 정렬됩니다.'; updateBar(); return; }
+    if (!q && !all) { view = []; $('#tbody').innerHTML = ''; autoPickEditor(''); $('#resultHint').textContent = '이름(담당주임단)이나 주소 일부를 입력하면 담당 지점이 나옵니다. 본부 › 사업단 › 지점 순으로 정렬됩니다.'; updateBar(); return; }
     rows.forEach(r => { r._sibling = false; });
     view = rows.filter(r => !q || matches(r, q)).sort((a, b) => a.seq - b.seq);
     // 분할 지점(A/B/C)은 검색에 걸린 행의 짝 행(다른 주소·다른 주임단)도 모두 함께 표시
@@ -190,6 +210,7 @@
       view.sort((a, b) => a.seq - b.seq);
     }
     const nB = view.filter(r => r.kind === '지점').length, nU = view.filter(r => r.kind !== '지점').length, nS = view.filter(r => r._sibling).length;
+    autoPickEditor(q);
     $('#resultHint').textContent = q ? `검색 결과: 지점 ${nB}개${nS ? ` (분할 지점의 다른 주소 ${nS}행 포함)` : ''}${nU ? ' · 본부/사업단 단위 ' + nU + '개' : ''}` : `전체 ${nB}개 지점 · 본부/사업단 단위 ${nU}개`;
     const ro = !editable();
     const confirmedNames = new Set(confirms.map(c => c['주임단']));
