@@ -89,6 +89,7 @@
 (function () {
   const $ = A4.q, esc = A4.esc;
   let code = '', round = null, rows = [], confirms = [], view = [];
+  let loadTimer = null, editorAuto = false; // load() 가 아래 선언보다 먼저 호출되므로 여기서 선언
   const dirty = {}; // row_id -> {field: value}
   const selected = new Set(); // 확인 완료 대상으로 체크된 row_id
 
@@ -109,7 +110,6 @@
     setTimeout(() => $('#codeInput').focus(), 50);
   }
 
-  let loadTimer = null;
   function showLoading() {
     $('#loading').classList.remove('hidden'); $('#loading').classList.remove('failed');
     $('#loadingRetry').classList.add('hidden'); $('#codeForm').classList.add('hidden'); $('#main').classList.add('hidden');
@@ -173,7 +173,6 @@
       Array.from(names).sort((a, b) => a.localeCompare(b, 'ko')).map(n => `<option>${esc(n)}</option>`).join('');
   }
   // 검색어가 주임단 이름과 일치하면 수정자 선택을 그 이름으로 자동 세팅 (직접 고른 값은 덮어쓰지 않음)
-  let editorAuto = false;
   function autoPickEditor(q) {
     const sel = $('#editor');
     if (sel.value && !editorAuto) return; // 사용자가 직접 선택한 상태
