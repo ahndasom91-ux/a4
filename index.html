@@ -18,6 +18,14 @@
     <span class="sub muted" id="loadState">불러오는 중…</span>
   </header>
 
+  <!-- 로딩 안내 -->
+  <section id="loading" class="loading card" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <h2>지점 정보를 불러오는 중입니다</h2>
+    <p class="hint" id="loadingMsg">처음 접속할 때는 5초 정도 걸릴 수 있습니다. 오류가 아니니 잠시만 기다려 주세요.</p>
+    <div class="actions hidden" id="loadingRetry" style="justify-content:center;margin-top:12px"><button class="btn" id="retryBtn">다시 시도</button></div>
+  </section>
+
   <!-- 접속코드 입력 -->
   <section id="codeForm" class="code-form card hidden">
     <h2>접속코드를 입력하세요</h2>
@@ -95,12 +103,31 @@
   $('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#codeGo').click(); });
 
   function showCodeForm(err) {
+    hideLoading();
     $('#codeForm').classList.remove('hidden'); $('#main').classList.add('hidden');
     $('#loadState').textContent = ''; $('#codeErr').textContent = err || '';
     setTimeout(() => $('#codeInput').focus(), 50);
   }
 
+  let loadTimer = null;
+  function showLoading() {
+    $('#loading').classList.remove('hidden'); $('#loading').classList.remove('failed');
+    $('#loadingRetry').classList.add('hidden'); $('#codeForm').classList.add('hidden'); $('#main').classList.add('hidden');
+    $('#loadingMsg').textContent = '처음 접속할 때는 5초 정도 걸릴 수 있습니다. 오류가 아니니 잠시만 기다려 주세요.';
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(() => { $('#loadingMsg').textContent = '서버 응답이 평소보다 오래 걸리고 있습니다. 조금만 더 기다려 주세요…'; }, 8000);
+  }
+  function hideLoading() { clearTimeout(loadTimer); $('#loading').classList.add('hidden'); }
+  function showLoadFailed(msg) {
+    clearTimeout(loadTimer);
+    $('#loading').classList.add('failed');
+    $('#loadingMsg').textContent = msg + ' 잠시 후 다시 시도해 주세요.';
+    $('#loadingRetry').classList.remove('hidden');
+  }
+  $('#retryBtn').onclick = () => load();
+
   async function load() {
+    showLoading();
     $('#loadState').textContent = '불러오는 중…';
     try {
       const res = await A4.api('round.get', { code });
@@ -109,6 +136,7 @@
         try { sessionStorage.setItem('a4code', code); } catch (e) {}
         if (!params.get('k')) history.replaceState(null, '', '?k=' + encodeURIComponent(code));
       }
+      hideLoading();
       $('#codeForm').classList.add('hidden'); $('#main').classList.remove('hidden');
       $('#roundTitle').textContent = round.title;
       $('#loadState').textContent = rows.filter(r => r.kind === '지점').length + '개 지점';
@@ -116,8 +144,10 @@
       const q = params.get('q'); if (q) { $('#q').value = q; }
       render();
     } catch (e) {
-      // 코드 없이 들어왔는데 서버가 코드를 요구하면 오류 문구 없이 입력 화면만 보여준다
-      showCodeForm(code ? e.message : '');
+      $('#loadState').textContent = '';
+      // 접속코드 문제면 코드 입력 화면으로, 그 외(네트워크·서버 지연 등)는 로딩 카드에 사유와 재시도 버튼 표시
+      if (/접속코드/.test(e.message)) showCodeForm(code ? e.message : '');
+      else showLoadFailed(e.message);
     }
   }
 
