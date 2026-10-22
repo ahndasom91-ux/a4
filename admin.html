@@ -146,7 +146,7 @@
       <div class="card">
         <h2>접속코드 방식</h2>
         <div class="row">
-          <label class="f">방식<select id="cfgCodeMode"><option value="round">회차별 자동 생성 (추천)</option><option value="fixed">고정 코드 1개</option></select></label>
+          <label class="f">방식<select id="cfgCodeMode"><option value="open">코드 없음 · 고정 링크 (추천, 최신 회차 자동)</option><option value="round">회차별 자동 생성</option><option value="fixed">고정 코드 1개</option></select></label>
           <label class="f">고정 코드 (fixed 일 때)<input type="text" id="cfgFixed" placeholder="예: goodrich-a4"></label>
         </div>
       </div>
@@ -322,7 +322,7 @@
     try {
       const r = await api('admin.rounds'); rounds = r.rounds;
       // 상단 '주임단 화면 열기' 링크에 최신 회차 코드를 미리 붙여 둔다
-      if (rounds.length && !cur) $('#openIndex').href = 'index.html?k=' + encodeURIComponent(rounds[rounds.length - 1].code);
+      if (rounds.length && !cur) $('#openIndex').href = indexLink(rounds[rounds.length - 1].code);
       $('#roundSel').innerHTML = rounds.slice().reverse().map(x => `<option value="${esc(x.round_id)}">${esc(x.round_id)} · ${esc(x.title)} · ${esc(x.status)}</option>`).join('') || '<option value="">(회차 없음)</option>';
       if (selectId) { $('#roundSel').value = selectId; showTab('status'); loadStatus(selectId); }
       else if (cur) $('#roundSel').value = cur.round.round_id;
@@ -342,7 +342,9 @@
     } catch (e) { A4.toast(e.message, 'bad'); }
   }
 
-  function shareLink(code) { return A4.SITE_URL + '?k=' + encodeURIComponent(code); }
+  function openMode() { return !!(config && config.code_mode === 'open'); }
+  function shareLink(code) { return openMode() ? A4.SITE_URL : A4.SITE_URL + '?k=' + encodeURIComponent(code); }
+  function indexLink(code) { return openMode() ? 'index.html' : 'index.html?k=' + encodeURIComponent(code); }
 
   function renderStatus() {
     const r = cur.round, rows = cur.rows;
@@ -352,8 +354,8 @@
     $('#statusBanner').innerHTML = `<span class="badge ${cls === 'open' ? 'ok' : cls === 'closed' ? 'warn' : 'blue'}">${esc(A4.statusLabel[st] || st)}</span><b>${esc(r.title)}</b>
       <span class="meta">마감 ${esc(A4.fmtDT(r.deadline))}${st === '마감' && r.stored_status === '진행중' ? ' (마감일시 경과로 자동 마감)' : ''}${r.completed_at ? ' · 총무팀 전달 ' + esc(A4.fmtDT(r.completed_at)) + (r.completed_note ? ' · ' + esc(r.completed_note) : '') : ''}</span>`;
     const link = shareLink(r.code);
-    $('#openIndex').href = 'index.html?k=' + encodeURIComponent(r.code);
-    $('#linkBox').innerHTML = `<span>주임단 링크: ${esc(link)}</span><button class="btn sm" id="copyLink">복사</button><button class="btn ghost sm" id="openLink">열기</button>`;
+    $('#openIndex').href = indexLink(r.code);
+    $('#linkBox').innerHTML = `<span>주임단 링크${openMode() ? ' (고정 링크 · 진행중인 최신 회차가 열림)' : ''}: ${esc(link)}</span><button class="btn sm" id="copyLink">복사</button><button class="btn ghost sm" id="openLink">열기</button>`;
     $('#openLink').onclick = () => window.open(link, '_blank');
     $('#copyLink').onclick = () => A4.copy(link);
 
@@ -364,7 +366,7 @@
     acts.push(`<button class="btn ok" id="actXlsx">최종 엑셀 다운로드</button>`);
     if (st === '마감') acts.push(`<button class="btn blue" id="actComplete">발주요청 완료</button>`);
     if (st === '발주완료') acts.push(`<button class="btn ghost" id="actUncomplete">완료 취소</button>`);
-    acts.push(`<button class="btn ghost sm" id="actRegen">코드 재생성</button>`);
+    if (!openMode()) acts.push(`<button class="btn ghost sm" id="actRegen">코드 재생성</button>`);
     acts.push(`<button class="btn danger sm" id="actDelete">회차 삭제</button>`);
     $('#roundActions').innerHTML = acts.join('');
     bind('#actDeadline', async () => {

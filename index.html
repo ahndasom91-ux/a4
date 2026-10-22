@@ -88,7 +88,8 @@
   const params = new URLSearchParams(location.search);
   code = (params.get('k') || params.get('code') || '').trim();
   if (!code) { try { code = sessionStorage.getItem('a4code') || ''; } catch (e) {} }
-  if (code) load(); else showCodeForm();
+  // 코드가 없어도 일단 서버에 요청: 코드 없는 고정 링크 방식(code_mode=open)이면 최신 회차가 열린다
+  load();
 
   $('#codeGo').onclick = () => { code = $('#codeInput').value.trim(); if (code) load(); };
   $('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#codeGo').click(); });
@@ -104,8 +105,10 @@
     try {
       const res = await A4.api('round.get', { code });
       round = res.round; rows = res.rows; confirms = res.confirms || [];
-      try { sessionStorage.setItem('a4code', code); } catch (e) {}
-      if (!params.get('k')) history.replaceState(null, '', '?k=' + encodeURIComponent(code));
+      if (code) {
+        try { sessionStorage.setItem('a4code', code); } catch (e) {}
+        if (!params.get('k')) history.replaceState(null, '', '?k=' + encodeURIComponent(code));
+      }
       $('#codeForm').classList.add('hidden'); $('#main').classList.remove('hidden');
       $('#roundTitle').textContent = round.title;
       $('#loadState').textContent = rows.filter(r => r.kind === '지점').length + '개 지점';
@@ -113,7 +116,8 @@
       const q = params.get('q'); if (q) { $('#q').value = q; }
       render();
     } catch (e) {
-      showCodeForm(e.message);
+      // 코드 없이 들어왔는데 서버가 코드를 요구하면 오류 문구 없이 입력 화면만 보여준다
+      showCodeForm(code ? e.message : '');
     }
   }
 
