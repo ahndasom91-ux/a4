@@ -138,6 +138,7 @@ td.sel input, th.sel input{width:17px; height:17px; margin:0; vertical-align:mid
 #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 #toast.bad{background:var(--bad); color:#fff}
 #toast.ok{background:var(--ok); color:#fff}
+#toast.warn{background:var(--warn); color:#fff}
 
 .tabs{display:flex; gap:4px; border-bottom:1px solid var(--line); margin:14px 0}
 .tabs button{border:0; background:transparent; padding:10px 14px; font-weight:600; color:var(--ink-3); border-bottom:2px solid transparent; cursor:pointer; margin-bottom:-1px}

@@ -173,7 +173,9 @@
     return {
       rows: rows, warnings: warnings, totals: totals,
       meta: { orgSheet: det.org.name, perfSheet: det.perf.name, perfRows: perfRowCount, divisor: divisor, countCol: countCol, aliases: aliases,
-              orgCandidates: det.orgCandidates, perfCandidates: det.perfCandidates }
+              orgCandidates: det.orgCandidates, perfCandidates: det.perfCandidates,
+              // 조직현황에 연락처 열이 있었는지. 개인정보 검출 솔루션 때문에 전화번호·FAX 열을 지우고 올리는 경우 false
+              hasContacts: c['전화번호'] >= 0 || c['FAX'] >= 0 }
     };
   }
 

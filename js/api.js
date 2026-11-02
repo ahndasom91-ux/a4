@@ -45,11 +45,11 @@ A4.norm = function (s) { return String(s || '').toLowerCase().replace(/\s+/g, ''
 A4.splitNames = function (s) {
   return String(s || '').split(/[\/,，·]|\s{2,}|\s,\s?/).map(function (x) { return x.replace(/\(.*?\)/g, '').trim(); }).filter(Boolean);
 };
-A4.toast = function (msg, kind) {
+A4.toast = function (msg, kind, ms) {
   let el = A4.q('#toast');
   if (!el) { el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
   el.textContent = msg; el.className = 'show ' + (kind || '');
-  clearTimeout(A4._toastT); A4._toastT = setTimeout(function () { el.className = ''; }, 3200);
+  clearTimeout(A4._toastT); A4._toastT = setTimeout(function () { el.className = ''; }, ms || 3200);
 };
 A4.copy = async function (text) {
   try { await navigator.clipboard.writeText(text); A4.toast('복사했습니다'); }
