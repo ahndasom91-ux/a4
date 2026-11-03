@@ -206,7 +206,8 @@
   function showTab(t) {
     A4.qa('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     ['new', 'status', 'config'].forEach(x => $('#tab-' + x).classList.toggle('hidden', x !== t));
-    if (t === 'status' && !cur && rounds.length) loadStatus(rounds[rounds.length - 1].round_id);
+    // 현황 탭을 열 때마다 회차 목록을 다시 받는다 (PC 도구나 다른 창에서 만든 회차가 바로 보이도록)
+    if (t === 'status') loadRounds(cur ? undefined : '__latest__');
   }
 
   // ════════════ ① 새 회차 ════════════
@@ -330,12 +331,13 @@
       // 상단 '주임단 화면 열기' 링크에 최신 회차 코드를 미리 붙여 둔다
       if (rounds.length && !cur) $('#openIndex').href = indexLink(rounds[rounds.length - 1].code);
       $('#roundSel').innerHTML = rounds.slice().reverse().map(x => `<option value="${esc(x.round_id)}">${esc(x.round_id)} · ${esc(x.title)} · ${esc(x.status)}</option>`).join('') || '<option value="">(회차 없음)</option>';
-      if (selectId) { $('#roundSel').value = selectId; showTab('status'); loadStatus(selectId); }
+      if (selectId === '__latest__') { if (rounds.length) { const id = rounds[rounds.length - 1].round_id; $('#roundSel').value = id; loadStatus(id); } }
+      else if (selectId) { $('#roundSel').value = selectId; showTab('status'); loadStatus(selectId); }
       else if (cur) $('#roundSel').value = cur.round.round_id;
     } catch (e) { A4.toast(e.message, 'bad'); }
   }
   $('#roundSel').onchange = () => loadStatus($('#roundSel').value);
-  $('#reloadStatus').onclick = () => cur && loadStatus(cur.round.round_id);
+  $('#reloadStatus').onclick = async () => { await loadRounds(); if (cur) loadStatus(cur.round.round_id); };
 
   async function loadStatus(roundId) {
     if (!roundId) return;
