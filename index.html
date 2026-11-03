@@ -59,7 +59,6 @@
       <ul>
         <li><b>수정</b>: 주소·담당주임단·수량·비고 칸을 바로 고치면 노란 배경으로 표시됩니다. 하단에서 본인 이름과 변경 사유를 넣고 <b>저장</b>을 누르세요.</li>
         <li><b>확인 완료</b>: 왼쪽 체크박스로 확인한 행을 고른 뒤 <b>확인 완료</b>를 누르세요. 본인 이름을 선택하면 담당 행이 자동으로 체크됩니다. 고칠 내용이 없어도 눌러 주세요.</li>
-        <li><span class="badge bad">매칭안됨</span> 정산 자료에서 지점명을 찾지 못해 수량이 0으로 산정된 지점입니다. 실제 필요한 수량을 직접 입력해 주세요.</li>
         <li><span class="badge soft">B · 2분할</span> 한 지점이 주소 여러 곳으로 나뉜 경우입니다. 지점 수량을 주소 수로 나눠 각 행에 배분했습니다.</li>
         <li>한 주소로 몰아 받으려면 그 행의 수량을 올리고 나머지 행은 0으로 고치세요.</li>
         <li><span class="badge warn">같은 지점</span> 다른 주임단이 담당하는 짝 주소입니다. 함께 표시되며, 수정하면 해당 주임단에게도 보입니다.</li>
@@ -262,7 +261,7 @@
       const mgrWas = cur('최종주임단') !== r['담당주임단'] ? `<span class="was">원본: ${esc(r['담당주임단'])}</span>` : '';
       const status = [];
       if (r._sibling) status.push(`<span class="badge warn" title="검색어와 직접 일치하지 않지만 같은 지점의 다른 주소라서 함께 표시">같은 지점 · ${esc(r['최종주임단'] || r['담당주임단'] || '담당자 미지정')} 담당</span>`);
-      if (!isUnit && r['매칭상태'] === '매칭안됨') status.push('<span class="badge bad" title="정산 자료에 이 지점명이 없어 0건으로 산정됨">매칭안됨</span>');
+      // 매칭안됨(정산 자료에 지점명 없음)은 주임단 화면에서는 따로 표시하지 않는다. 담당자 화면(admin.html)에서만 구분
       if (r['확인상태'] === '확인') status.push('<span class="badge ok">확인</span>');
       if (r['최종수정자']) status.push(`<span class="badge" title="${esc(r['최종수정일시'])}">${esc(r['최종수정자'])} 수정</span>`);
       const changed = Object.keys(d).length ? ' changed' : '';
